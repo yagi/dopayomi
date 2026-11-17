@@ -572,7 +572,7 @@ textarea[readonly] { color: var(--muted); }
       </form>
       <ul id="shelf" aria-label="書棚の本"></ul>
       <p class="hint" id="shelfNote"></p>
-      <details id="textBox">
+      <details id="textBox" open>
         <summary>本文を表示</summary>
         <textarea id="text" spellcheck="false" aria-label="読んでいる本の本文"></textarea>
         <p class="hint" id="textNote"></p>
@@ -1346,11 +1346,11 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     el.text.value = cur.text;
     el.text.readOnly = b.kind !== 'user';
     $('textNote').textContent = b.kind === 'user' ? '書き換えると保存されます。本文が変わると読んだ位置は冒頭に戻ります。'
-      : b.kind === 'aozora' ? '青空文庫の本は書き換えられません。'
+      : b.kind === 'aozora' ? ''
       : 'サンプルは書き換えられません。';
     if (b.kind === 'aozora' && b.card) {
-      var a = document.createElement('a'); a.href = b.card; a.textContent = '図書カード（青空文庫）'; a.target = '_blank'; a.rel = 'noopener';
-      $('textNote').appendChild(document.createTextNode(' ')); $('textNote').appendChild(a);
+      var a = document.createElement('a'); a.href = b.card; a.textContent = '図書カード：' + b.title + '（青空文庫）'; a.target = '_blank'; a.rel = 'noopener';
+      $('textNote').appendChild(a);
     }
   }
   var editTimer = null;
