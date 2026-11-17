@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-skin="paper">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dopayomi</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;700&family=Zen+Old+Mincho:wght@400;700&family=Zen+Kaku+Gothic+New:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;700&family=Zen+Old+Mincho:wght@400;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Dela+Gothic+One&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* 紙と活字: 紙の地に墨の明朝。カードや角丸は使わず、罫線で区切る。差し色は栞紐の臙脂だけ。
    レイアウト: 上に罫線で挟んだ表示窓、その下に操作の行、さらに下で「設定」と「書棚・区切りの確認」を2段組。 */
@@ -81,7 +81,8 @@ h2 {
 /* 表示窓: 上下の罫線と、中央を示す細い縦線だけ */
 .stage {
   position: relative;
-  background: var(--bg);
+  background: var(--stage-bg, var(--bg));
+  color: var(--stage-ink, var(--ink));
   border-top: 1px solid var(--rule);
   border-bottom: 1px solid var(--rule);
   height: 220px;
@@ -234,7 +235,8 @@ textarea {
 #shelf { list-style: none; margin: 0; padding: 0; max-height: 340px; overflow-y: auto; }
 .book { position: relative; display: flex; align-items: baseline; gap: 10px; padding: 7px 0 7px 14px; border-bottom: 1px solid var(--rule-soft); }
 .book.current::before { content: ""; position: absolute; left: 0; top: 0; bottom: -1px; width: 3px; background: var(--accent); }   /* 栞紐 */
-.book .open { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; border: 0; padding: 0; letter-spacing: 0; text-align: left; }
+.book .open { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; border: 0; padding: 0; letter-spacing: 0; text-align: left; background: transparent; box-shadow: none; font-weight: inherit; color: inherit; }
+.book .open:active { transform: none; }
 .book .open:hover { background: none; }
 .book .open:hover .title { color: var(--accent); }
 .book .title { font-family: var(--font-display); font-weight: 700; font-size: 16.5px; white-space: nowrap; }
@@ -256,6 +258,201 @@ details > summary { cursor: pointer; color: var(--muted); font-size: 13.5px; let
 details[open] > summary { margin-bottom: 8px; }
 textarea[readonly] { color: var(--muted); }
 #textNote a { color: var(--accent); }
+
+/* ================= テーマ =================
+   既定（上の指定）は「紙と活字」。以下は <html data-skin="…"> で上書きする。
+   計器・ドパ・夜は一つの世界観で描くため、ライト／ダークの切り替えを持たない。 */
+
+/* ---- 標準: 最初の見た目（青灰の地に白いカード） ---- */
+:root[data-skin="classic"] {
+  color-scheme: light;
+  --bg: #eef1f5; --surface: #ffffff; --ink: #1b2330; --muted: #5d6878;
+  --rule: #d3d9e2; --rule-soft: #e8ecf1; --field: #dfe4eb;
+  --accent: #2c4a9a; --accent-ink: #ffffff; --mark: #dfe7fb;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-skin="classic"]:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #12161d; --surface: #1b212b; --ink: #e8ecf2; --muted: #98a3b3;
+    --rule: #313a48; --rule-soft: #252c37; --field: #0b0e13;
+    --accent: #8fb0ff; --accent-ink: #10192c; --mark: #2a3a63;
+  }
+}
+:root[data-skin="classic"][data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #12161d; --surface: #1b212b; --ink: #e8ecf2; --muted: #98a3b3;
+  --rule: #313a48; --rule-soft: #252c37; --field: #0b0e13;
+  --accent: #8fb0ff; --accent-ink: #10192c; --mark: #2a3a63;
+}
+[data-skin="classic"] body { font-size: 15px; line-height: 1.7; }
+[data-skin="classic"] main { gap: 16px; padding-top: 20px; }
+[data-skin="classic"] header { border-bottom: 0; padding-bottom: 0; }
+[data-skin="classic"] h1 { font-family: var(--font-body); font-size: 18px; letter-spacing: .04em; }
+[data-skin="classic"] h2 { font-family: var(--font-body); font-size: 13px; color: var(--muted); letter-spacing: .08em; }
+[data-skin="classic"] .stage { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; height: 200px; }
+[data-skin="classic"] .stage::before, [data-skin="classic"] .stage::after { width: 2px; height: 22px; margin-left: -1px; }
+[data-skin="classic"] input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--rule); }
+[data-skin="classic"] input[type="range"]::-moz-range-track { height: 4px; border-radius: 2px; background: var(--rule); }
+[data-skin="classic"] input[type="range"]::-webkit-slider-thumb { width: 16px; height: 16px; margin-top: -6px; border-radius: 50%; background: var(--accent); }
+[data-skin="classic"] input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); }
+[data-skin="classic"] .stats { letter-spacing: 0; font-size: 12.5px; }
+[data-skin="classic"] .controls { border-bottom: 0; padding-bottom: 0; }
+[data-skin="classic"] button { background: var(--surface); border-color: var(--rule); border-radius: 8px; padding: 7px 14px; letter-spacing: 0; font-weight: 500; }
+[data-skin="classic"] button:hover { background: var(--surface); border-color: var(--accent); }
+[data-skin="classic"] button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+[data-skin="classic"] input[type="checkbox"] { accent-color: var(--accent); }
+[data-skin="classic"] .grid { gap: 16px; }
+[data-skin="classic"] .grid > .panel { padding: 16px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); margin: 0; }
+[data-skin="classic"] .panel h2 { border-bottom: 0; padding-bottom: 0; }
+[data-skin="classic"] .seg { border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; display: grid; grid-template-columns: repeat(auto-fit, minmax(48px, 1fr)); }
+[data-skin="classic"] .seg label { text-align: center; padding: 6px 4px; border-left: 1px solid var(--rule); color: var(--ink); font-size: 14px; }
+[data-skin="classic"] .seg label:first-of-type { padding-left: 4px; border-left: 0; }
+[data-skin="classic"] .seg input:checked + label { background: var(--accent); color: var(--accent-ink); text-decoration: none; font-weight: 700; }
+[data-skin="classic"] input[type="text"] { border: 1px solid var(--rule); border-radius: 8px; padding: 6px 10px; background: var(--bg); }
+[data-skin="classic"] textarea { border: 1px solid var(--rule); border-radius: 8px; line-height: 1.7; }
+[data-skin="classic"] #preview { border: 1px solid var(--rule-soft); border-radius: 8px; padding: 10px 12px; line-height: 2.1; }
+[data-skin="classic"] #preview span.now { background: var(--accent); color: var(--accent-ink); text-decoration: none; border-radius: 3px; }
+[data-skin="classic"] #shelf { display: flex; flex-direction: column; gap: 6px; }
+[data-skin="classic"] .book { border: 1px solid var(--rule-soft); border-radius: 8px; padding: 8px 10px; }
+[data-skin="classic"] .book.current { border-color: var(--accent); background: var(--mark); }
+[data-skin="classic"] .book.current::before { display: none; }
+[data-skin="classic"] .book .title { font-family: var(--font-body); font-size: 15px; }
+[data-skin="classic"] .book .leader { border-bottom-color: transparent; }
+[data-skin="classic"] .addform { border: 1px solid var(--rule); border-radius: 8px; padding: 12px; }
+
+/* ---- 計器: 瞬間露出器。灰色の筐体、黒い表示窓、目盛り、黄色の差し色 ---- */
+:root[data-skin="tachisto"] {
+  color-scheme: light;
+  --bg: #d6d5cf; --surface: #e3e2dd; --ink: #1c1c1b; --muted: #55554f;
+  --rule: #1c1c1b; --rule-soft: #b3b2ab; --field: #c9c8c1;
+  --accent: #f0b400; --accent-ink: #1c1c1b; --mark: #ecd78a;
+  --stage-bg: #121211; --stage-ink: #f1eee2;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", sans-serif;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+[data-skin="tachisto"] body { font-size: 14.5px; line-height: 1.7; }
+[data-skin="tachisto"] header { border-bottom: 2px solid var(--rule); }
+[data-skin="tachisto"] h1 { font-family: var(--font-mono); font-size: 20px; font-weight: 500; letter-spacing: .35em; text-transform: uppercase; }
+[data-skin="tachisto"] header p { font-size: 12.5px; }
+[data-skin="tachisto"] h2 { font-family: var(--font-mono); font-size: 12px; letter-spacing: .25em; }
+[data-skin="tachisto"] .panel h2 { flex: none; border: 0; padding: 1px 10px; background: var(--ink); color: var(--accent); align-self: flex-start; }
+[data-skin="tachisto"] .stage { border: 10px solid #2b2b29; border-radius: 6px; box-shadow: inset 0 0 0 1px #000, 0 2px 0 #9a9992; height: 230px; }
+[data-skin="tachisto"] #chunk { font-weight: 500; }
+[data-skin="tachisto"] .stage::before, [data-skin="tachisto"] .stage::after { width: 2px; margin-left: -1px; }
+[data-skin="tachisto"] input[type="range"]::-webkit-slider-runnable-track { height: 8px; background: linear-gradient(var(--rule), var(--rule)) bottom / 100% 1px no-repeat, repeating-linear-gradient(90deg, var(--rule) 0 1px, transparent 1px 10%); }
+[data-skin="tachisto"] input[type="range"]::-moz-range-track { height: 8px; background: linear-gradient(var(--rule), var(--rule)) bottom / 100% 1px no-repeat, repeating-linear-gradient(90deg, var(--rule) 0 1px, transparent 1px 10%); }
+[data-skin="tachisto"] input[type="range"]::-webkit-slider-thumb { width: 12px; height: 20px; margin-top: -8px; background: var(--accent); border: 2px solid var(--ink); }
+[data-skin="tachisto"] input[type="range"]::-moz-range-thumb { width: 8px; height: 16px; background: var(--accent); border: 2px solid var(--ink); }
+[data-skin="tachisto"] .stats, [data-skin="tachisto"] .field output, [data-skin="tachisto"] .book .meta, [data-skin="tachisto"] .book .state { font-family: var(--font-mono); letter-spacing: .05em; }
+[data-skin="tachisto"] .field output { color: var(--ink); background: var(--accent); padding: 0 6px; }
+[data-skin="tachisto"] .controls { border-bottom: 2px solid var(--rule-soft); }
+[data-skin="tachisto"] button { background: #ebeae5; border: 2px solid var(--ink); border-radius: 3px; box-shadow: 0 2px 0 var(--ink); padding: 3px 14px; letter-spacing: .1em; font-weight: 500; }
+[data-skin="tachisto"] button:hover { background: #f4f3ee; }
+[data-skin="tachisto"] button:active { transform: translateY(2px); box-shadow: none; }
+[data-skin="tachisto"] button.primary { background: var(--accent); color: var(--ink); }
+[data-skin="tachisto"] button.primary:hover { background: #ffc81a; color: var(--ink); border-color: var(--ink); }
+[data-skin="tachisto"] .grid { gap: 16px; }
+[data-skin="tachisto"] .grid > .panel { padding: 16px; border: 2px solid var(--ink); border-radius: 4px; background: var(--surface); margin: 0; }
+[data-skin="tachisto"] .seg input:checked + label { text-decoration: none; background: var(--ink); color: var(--accent); }
+[data-skin="tachisto"] .seg label { padding: 0 10px; border-left: 2px solid var(--rule-soft); color: var(--ink); }
+[data-skin="tachisto"] .seg label:first-of-type { padding-left: 10px; }
+[data-skin="tachisto"] textarea { background: var(--field); border: 2px solid var(--ink); border-radius: 3px; }
+[data-skin="tachisto"] #preview span.now { color: var(--ink); background: var(--accent); text-decoration: none; }
+[data-skin="tachisto"] .book.current::before { background: var(--accent); width: 6px; }
+[data-skin="tachisto"] .book .title { font-family: var(--font-body); font-size: 15px; }
+[data-skin="tachisto"] .book.current .state { color: var(--ink); }
+[data-skin="tachisto"] .addform { border-width: 2px; }
+
+/* ---- ドパ: 濃い紫の地に蛍光ピンクと水色、太いゴシック、ずらした影 ---- */
+:root[data-skin="dopa"] {
+  color-scheme: dark;
+  --bg: #14061f; --surface: #1f0c30; --ink: #fbf6ff; --muted: #b9a0d2;
+  --rule: #ff2e88; --rule-soft: #4a2766; --field: #2a1240;
+  --accent: #ff2e88; --accent-ink: #14061f; --mark: #3a1557; --accent2: #22e6ff;
+  --stage-bg: #000;
+  --font-display: "Dela Gothic One", "Zen Kaku Gothic New", sans-serif;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+}
+[data-skin="dopa"] body { font-size: 15px; line-height: 1.7; font-weight: 500; }
+[data-skin="dopa"] header { border-bottom: 4px solid var(--accent2); }
+[data-skin="dopa"] h1 { font-size: 36px; letter-spacing: .02em; color: var(--accent); text-shadow: 3px 3px 0 var(--accent2); font-weight: 400; }
+[data-skin="dopa"] h2 { font-family: var(--font-display); font-weight: 400; letter-spacing: .1em; font-size: 15px; }
+[data-skin="dopa"] .panel h2 { flex: none; align-self: flex-start; border: 0; padding: 0 10px; background: var(--accent2); color: var(--bg); }
+[data-skin="dopa"] .stage { border: 4px solid var(--accent); box-shadow: 8px 8px 0 var(--accent2); height: 230px; margin-right: 8px; }
+[data-skin="dopa"] #chunk { font-weight: 400; }
+[data-skin="dopa"] .stage::before, [data-skin="dopa"] .stage::after { width: 4px; margin-left: -2px; background: var(--accent2); }
+[data-skin="dopa"] input[type="range"]::-webkit-slider-runnable-track { height: 6px; background: var(--rule-soft); }
+[data-skin="dopa"] input[type="range"]::-moz-range-track { height: 6px; background: var(--rule-soft); }
+[data-skin="dopa"] input[type="range"]::-webkit-slider-thumb { width: 18px; height: 18px; margin-top: -6px; background: var(--accent2); }
+[data-skin="dopa"] input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; background: var(--accent2); }
+[data-skin="dopa"] #seek::-webkit-slider-thumb { background: var(--accent); }
+[data-skin="dopa"] #seek::-moz-range-thumb { background: var(--accent); }
+[data-skin="dopa"] .stats { color: var(--accent2); letter-spacing: .05em; font-weight: 700; }
+[data-skin="dopa"] .controls { border-bottom: 2px solid var(--rule-soft); }
+[data-skin="dopa"] button { border: 3px solid var(--ink); font-weight: 700; letter-spacing: .08em; padding: 3px 16px; }
+[data-skin="dopa"] button:hover { background: var(--mark); }
+[data-skin="dopa"] button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); box-shadow: 4px 4px 0 var(--accent2); }
+[data-skin="dopa"] button.primary:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--accent2); background: var(--accent); color: var(--bg); }
+[data-skin="dopa"] input[type="checkbox"] { accent-color: var(--accent); }
+[data-skin="dopa"] .grid > .panel:first-child { border-right: 3px solid var(--rule-soft); }
+[data-skin="dopa"] .seg label { color: var(--muted); border-left: 2px solid var(--rule-soft); }
+[data-skin="dopa"] .seg input:checked + label { text-decoration: none; background: var(--accent); color: var(--bg); }
+[data-skin="dopa"] .seg label { padding: 0 10px; }
+[data-skin="dopa"] .seg label:first-of-type { padding-left: 10px; }
+[data-skin="dopa"] .field output { color: var(--accent2); font-weight: 700; }
+[data-skin="dopa"] textarea { border: 2px solid var(--rule-soft); }
+[data-skin="dopa"] #preview span.now { background: var(--accent); color: var(--bg); text-decoration: none; }
+[data-skin="dopa"] .book .title { font-family: var(--font-display); font-weight: 400; font-size: 16px; }
+[data-skin="dopa"] .book .leader { border-bottom: 2px dotted var(--rule-soft); }
+[data-skin="dopa"] .book.current::before { width: 6px; background: var(--accent2); }
+[data-skin="dopa"] .book.current .state, [data-skin="dopa"] .book .open:hover .title { color: var(--accent2); }
+
+/* ---- 夜読み: ほぼ黒の地に文字だけが浮かぶ。操作部品は小さく控えめ ---- */
+:root[data-skin="night"] {
+  color-scheme: dark;
+  --bg: #0c0c0d; --ink: #b4b0a7; --muted: #66645f;
+  --rule: #2c2c2e; --rule-soft: #1c1c1e; --field: #141416;
+  --accent: #b38848; --accent-ink: #0c0c0d; --mark: #1b1915;
+  --stage-ink: #e2ddd2;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+}
+[data-skin="night"] body { font-size: 13.5px; line-height: 1.75; }
+[data-skin="night"] main { gap: 18px; }
+[data-skin="night"] header { border-bottom: 1px solid var(--rule); }
+[data-skin="night"] h1 { font-family: var(--font-body); font-size: 14px; font-weight: 400; letter-spacing: .4em; color: var(--muted); }
+[data-skin="night"] header p { font-size: 12px; }
+[data-skin="night"] h2 { font-family: var(--font-body); font-size: 12px; font-weight: 400; color: var(--muted); letter-spacing: .3em; }
+[data-skin="night"] .panel h2 { border-bottom-color: var(--rule); }
+[data-skin="night"] .stage { border: 0; height: 340px; }
+[data-skin="night"] #chunk { font-weight: 400; }
+[data-skin="night"] .stage::before, [data-skin="night"] .stage::after { height: 12px; opacity: .6; }
+[data-skin="night"] .stage::before { top: calc(50% - 70px); }
+[data-skin="night"] .stage::after { bottom: calc(50% - 70px); }
+[data-skin="night"] input[type="range"]::-webkit-slider-runnable-track { background: var(--rule); }
+[data-skin="night"] input[type="range"]::-moz-range-track { background: var(--rule); }
+[data-skin="night"] input[type="range"]::-webkit-slider-thumb { width: 7px; height: 7px; margin-top: -3px; border-radius: 50%; background: var(--muted); }
+[data-skin="night"] input[type="range"]::-moz-range-thumb { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+[data-skin="night"] #seek::-webkit-slider-thumb { background: var(--accent); }
+[data-skin="night"] #seek::-moz-range-thumb { background: var(--accent); }
+[data-skin="night"] .stats { font-size: 12px; }
+[data-skin="night"] .controls { border-bottom-color: var(--rule); font-size: 13px; }
+[data-skin="night"] button { border: 0; padding: 2px 6px; color: var(--muted); letter-spacing: .15em; }
+[data-skin="night"] button:hover { background: none; color: var(--ink); }
+[data-skin="night"] button.primary { background: none; color: var(--accent); min-width: 0; }
+[data-skin="night"] button.primary:hover { background: none; color: var(--stage-ink); border: 0; }
+[data-skin="night"] .del { border: 0; }
+[data-skin="night"] input[type="checkbox"] { accent-color: var(--accent); opacity: .8; }
+[data-skin="night"] .grid > .panel:first-child { border-right-color: var(--rule); }
+[data-skin="night"] .seg label { border-left-color: var(--rule); }
+[data-skin="night"] .seg input:checked + label { text-decoration-thickness: 1px; }
+[data-skin="night"] .book { border-bottom-color: var(--rule-soft); }
+[data-skin="night"] .book .title { font-family: var(--font-body); font-weight: 400; font-size: 14px; }
+[data-skin="night"] .book .leader { border-bottom-color: var(--rule); }
+[data-skin="night"] .book.current::before { width: 1px; }
+[data-skin="night"] .addform { border-color: var(--rule); }
+[data-skin="night"] kbd { border-color: var(--rule); }
 </style>
 </head>
 <body>
@@ -285,6 +482,17 @@ textarea[readonly] { color: var(--muted); }
   <div class="grid">
     <section class="panel" aria-labelledby="h-set">
       <h2 id="h-set">設定</h2>
+
+      <div class="field">
+        <span class="label">見た目</span>
+        <div class="seg" role="radiogroup" aria-label="見た目">
+          <input type="radio" name="skin" id="k-classic" value="classic"><label for="k-classic">標準</label>
+          <input type="radio" name="skin" id="k-tachisto" value="tachisto"><label for="k-tachisto">計器</label>
+          <input type="radio" name="skin" id="k-dopa" value="dopa"><label for="k-dopa">ドパ</label>
+          <input type="radio" name="skin" id="k-paper" value="paper" checked><label for="k-paper">紙</label>
+          <input type="radio" name="skin" id="k-night" value="night"><label for="k-night">夜</label>
+        </div>
+      </div>
 
       <div class="field">
         <span class="label">区切り方</span>
@@ -781,7 +989,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     text: $('text'), preview: $('preview'), cpm: $('cpm'), cpmOut: $('cpmOut'), maxLen: $('maxLen'), maxLenOut: $('maxLenOut'),
     maxLenLabel: $('maxLenLabel'), maxLenHint: $('maxLenHint'), pause: $('pause'), pauseOut: $('pauseOut'), gothic: $('gothic'), merge: $('merge'), autofull: $('autofull'), fullNote: $('fullNote'), immersive: $('immersive'), follow: $('follow'), fsKanji: $('fsKanji'), fsKanjiOut: $('fsKanjiOut'), fsKana: $('fsKana'), fsKanaOut: $('fsKanaOut'), terms: $('terms'), auto: $('auto'), detected: $('detected'), modeHint: $('modeHint') };
 
-  var st = { v3: true, v4: true, mode: 'bunsetsu', cpm: 900, maxLen: 5, pause: 1.2, gothic: false, immersive: true, autofull: false, follow: true, fsKanji: 70, fsKana: 65, merge: true, terms: '', auto: true, book: 'sample' };
+  var st = { v3: true, v4: true, mode: 'bunsetsu', cpm: 900, maxLen: 5, pause: 1.2, gothic: false, immersive: true, autofull: false, skin: 'paper', follow: true, fsKanji: 70, fsKana: 65, merge: true, terms: '', auto: true, book: 'sample' };
   var legacyText = null;   // 書棚ができる前に保存していた本文（あれば「前回の本文」として書棚に移す）
   try {
     var saved = JSON.parse(localStorage.getItem('rsvp-ja-2') || 'null');
@@ -977,6 +1185,8 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
       : kuro.state === 'error' ? kuro.error + ' 文節モードの区切りで表示しています。'
       : HINTS.pos;
     var r = document.querySelector('input[name="mode"][value="' + st.mode + '"]'); if (r) r.checked = true;
+    document.documentElement.dataset.skin = st.skin;
+    var k = document.querySelector('input[name="skin"][value="' + st.skin + '"]'); if (k) k.checked = true;
   }
 
   el.play.addEventListener('click', function () { setPlaying(!playing); });
@@ -1020,6 +1230,9 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     } catch (e) { note.textContent = '下の文字列を手でコピーしてください'; }
   });
   el.gothic.addEventListener('change', function () { st.gothic = el.gothic.checked; syncUI(); save(); });
+  document.querySelectorAll('input[name="skin"]').forEach(function (r) {
+    r.addEventListener('change', function () { st.skin = r.value; syncUI(); show(); save(); });
+  });
   document.querySelectorAll('input[name="mode"]').forEach(function (r) {
     r.addEventListener('change', function () { st.mode = r.value; syncUI(); rebuild(true); save(); });
   });
@@ -1063,7 +1276,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
       var kind = b.kind === 'user' ? '追加' : '';
       [['title', b.title || '（無題）'], ['author', b.author], ['leader', ''],
        ['meta', [b.chars ? fmtChars(b.chars) : '', kind].filter(Boolean).join('　')],
-       ['state', p && p.done ? '読了' : p && p.pct > 0 ? kanjiNum(pct) + '％' : '未読']].forEach(function (x) {
+       ['state', p && p.done ? '読了' : p && p.pct > 0 ? kanjiNum(Math.max(1, pct)) + '％' : '未読']].forEach(function (x) {
         if (!x[1] && x[0] !== 'leader') return;
         var s = document.createElement('span'); s.className = x[0]; s.textContent = x[1]; open.appendChild(s);
       });
