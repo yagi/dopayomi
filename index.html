@@ -151,7 +151,7 @@ input[type="range"]::-moz-range-thumb { width: 9px; height: 15px; background: va
 #seek::-moz-range-thumb { background: var(--accent); }
 
 .bar { display: flex; flex-direction: column; gap: 2px; }
-.stats { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 13.5px; letter-spacing: .08em; flex-wrap: wrap; }
+.stats { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 13.5px; letter-spacing: .04em; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
 
 .controls { display: flex; gap: 10px 14px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid var(--rule-soft); padding-bottom: 14px; }
 button {
@@ -1033,7 +1033,6 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     fixed: '句読点と括弧を除いて、この字数ごとに切ります。'
   };
   var $ = function (id) { return document.getElementById(id); };
-  function kanjiNum(n) { return String(n).replace(/\d/g, function (d) { return '〇一二三四五六七八九'[d]; }); }   // 1178 → 一一七八
   var el = { chunk: $('chunk'), stage: $('stage'), seek: $('seek'), pos: $('pos'), remain: $('remain'), play: $('play'),
     text: $('text'), preview: $('preview'), cpm: $('cpm'), cpmOut: $('cpmOut'), maxLen: $('maxLen'), maxLenOut: $('maxLenOut'),
     maxLenLabel: $('maxLenLabel'), maxLenHint: $('maxLenHint'), pause: $('pause'), pauseOut: $('pauseOut'), gothic: $('gothic'), merge: $('merge'), ruby: $('ruby'), autofull: $('autofull'), fullNote: $('fullNote'), immersive: $('immersive'), follow: $('follow'), fsKanji: $('fsKanji'), fsKanjiOut: $('fsKanjiOut'), fsKana: $('fsKana'), fsKanaOut: $('fsKanaOut'), terms: $('terms'), auto: $('auto'), detected: $('detected'), modeHint: $('modeHint') };
@@ -1230,8 +1229,8 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     var rest = 0;
     for (var i = idx; i < chunks.length; i++) rest += duration(chunks[i], st.cpm, st.pause);
     var sec = Math.round(rest / 1000);
-    el.pos.textContent = chunks.length ? kanjiNum(idx + 1) + '／' + kanjiNum(chunks.length) : '';
-    el.remain.textContent = chunks.length ? '残り' + (sec >= 60 ? kanjiNum(Math.floor(sec / 60)) + '分' : '') + kanjiNum(sec % 60) + '秒' : '';
+    el.pos.textContent = chunks.length ? (idx + 1) + ' / ' + chunks.length : '';
+    el.remain.textContent = chunks.length ? '残り ' + (sec >= 60 ? Math.floor(sec / 60) + '分' : '') + (sec % 60) + '秒' : '';
   }
 
   function tick() {
@@ -1372,7 +1371,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
       var kind = b.kind === 'user' ? '追加' : '';
       [['title', b.title || '（無題）'], ['author', b.author], ['leader', ''],
        ['meta', [b.chars ? fmtChars(b.chars) : '', kind].filter(Boolean).join('　')],
-       ['state', p && p.done ? '読了' : p && p.pct > 0 ? kanjiNum(Math.max(1, pct)) + '％' : '未読']].forEach(function (x) {
+       ['state', p && p.done ? '読了' : p && p.pct > 0 ? Math.max(1, pct) + '%' : '未読']].forEach(function (x) {
         if (!x[1] && x[0] !== 'leader') return;
         var s = document.createElement('span'); s.className = x[0]; s.textContent = x[1]; open.appendChild(s);
       });
