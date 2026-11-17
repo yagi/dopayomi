@@ -183,6 +183,7 @@ input[type="checkbox"] { accent-color: var(--ink); }
 .seg label { cursor: pointer; padding: 0 12px; border-left: 1px solid var(--rule-soft); color: var(--muted); }
 .seg label:first-of-type { border-left: 0; padding-left: 0; }
 .seg input { position: absolute; opacity: 0; pointer-events: none; }
+.field .seg label { display: block; text-align: center; }   /* .field label の横並び指定を打ち消し、選択肢の文字を中央に置く */
 .seg input:checked + label { color: var(--ink); text-decoration: underline 2px var(--accent); text-underline-offset: 6px; }
 .seg input:focus-visible + label { outline: 1px solid var(--accent); outline-offset: 2px; }
 .check { display: flex; gap: 8px; align-items: center; }
