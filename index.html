@@ -6,7 +6,8 @@
 <title>Dopayomi</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;700&family=Zen+Old+Mincho:wght@400;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Dela+Gothic+One&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Webフォントは見出し（題名と「設定」「書棚」「区切りの確認」）の文字だけを読み込む。本文と表示窓はOSのフォントを使い、読んでいる途中に通信が起きないようにする -->
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@700&family=Dela+Gothic+One&family=IBM+Plex+Mono:wght@500&text=DopayomiDOPAYOMI%E8%A8%AD%E5%AE%9A%E6%9B%B8%E6%A3%9A%E5%8C%BA%E5%88%87%E3%82%8A%E3%81%AE%E7%A2%BA%E8%AA%8D&display=swap" rel="stylesheet">
 <style>
 /* 紙と活字: 紙の地に墨の明朝。カードや角丸は使わず、罫線で区切る。差し色は栞紐の臙脂だけ。
    レイアウト: 上に罫線で挟んだ表示窓、その下に操作の行、さらに下で「設定」と「書棚・区切りの確認」を2段組。 */
@@ -20,9 +21,13 @@
   --accent: #8b2a2c;
   --accent-ink: #f6f4ef;
   --mark: #ebe4d8;
-  --font-display: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
-  --font-body: "Zen Old Mincho", "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
-  --font-gothic: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  --sys-mincho: "Hiragino Mincho ProN", "Hiragino Mincho Pro", "Yu Mincho", YuMincho, "Noto Serif JP", "Noto Serif CJK JP", serif;
+  --sys-gothic: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", YuGothic, Meiryo, "Noto Sans JP", "Noto Sans CJK JP", system-ui, sans-serif;
+  --sys-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --font-head: "Shippori Mincho", var(--sys-mincho);   /* 見出しだけ Webフォント */
+  --font-display: var(--sys-mincho);
+  --font-body: var(--sys-mincho);
+  --font-gothic: var(--sys-gothic);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -72,10 +77,10 @@ header {
   display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
   border-bottom: 3px double var(--rule); padding-bottom: 10px;
 }
-h1 { font-family: var(--font-display); font-size: 30px; margin: 0; font-weight: 700; letter-spacing: .18em; line-height: 1.2; }
+h1 { font-family: var(--font-head); font-size: 30px; margin: 0; font-weight: 700; letter-spacing: .18em; line-height: 1.2; }
 header p { margin: 0; color: var(--muted); font-size: 13.5px; letter-spacing: .04em; }
 h2 {
-  font-family: var(--font-display); font-size: 14px; margin: 0; font-weight: 700; letter-spacing: .4em;
+  font-family: var(--font-head); font-size: 14px; margin: 0; font-weight: 700; letter-spacing: .4em;
 }
 
 /* 表示窓: 上下の罫線と、中央を示す細い縦線だけ */
@@ -270,7 +275,7 @@ textarea[readonly] { color: var(--muted); }
   --bg: #eef1f5; --surface: #ffffff; --ink: #1b2330; --muted: #5d6878;
   --rule: #d3d9e2; --rule-soft: #e8ecf1; --field: #dfe4eb;
   --accent: #2c4a9a; --accent-ink: #ffffff; --mark: #dfe7fb;
-  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  --font-body: var(--sys-gothic);
 }
 @media (prefers-color-scheme: dark) {
   :root[data-skin="classic"]:not([data-theme="light"]) {
@@ -329,15 +334,16 @@ textarea[readonly] { color: var(--muted); }
   --rule: #1c1c1b; --rule-soft: #b3b2ab; --field: #c9c8c1;
   --accent: #f0b400; --accent-ink: #1c1c1b; --mark: #ecd78a;
   --stage-bg: #121211; --stage-ink: #f1eee2;
-  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", sans-serif;
-  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-display: var(--sys-gothic);
+  --font-body: var(--sys-gothic);
+  --font-mono: var(--sys-mono);
+  --font-head: "IBM Plex Mono", var(--sys-mono);
 }
 [data-skin="tachisto"] body { font-size: 14.5px; line-height: 1.7; }
 [data-skin="tachisto"] header { border-bottom: 2px solid var(--rule); }
-[data-skin="tachisto"] h1 { font-family: var(--font-mono); font-size: 20px; font-weight: 500; letter-spacing: .35em; text-transform: uppercase; }
+[data-skin="tachisto"] h1 { font-family: var(--font-head); font-size: 20px; font-weight: 500; letter-spacing: .35em; text-transform: uppercase; }
 [data-skin="tachisto"] header p { font-size: 12.5px; }
-[data-skin="tachisto"] h2 { font-family: var(--font-mono); font-size: 12px; letter-spacing: .25em; }
+[data-skin="tachisto"] h2 { font-family: var(--font-head); font-weight: 500; font-size: 12px; letter-spacing: .25em; }
 [data-skin="tachisto"] .panel h2 { flex: none; border: 0; padding: 1px 10px; background: var(--ink); color: var(--accent); align-self: flex-start; }
 [data-skin="tachisto"] .stage { border: 10px solid #2b2b29; border-radius: 6px; box-shadow: inset 0 0 0 1px #000, 0 2px 0 #9a9992; height: 230px; }
 [data-skin="tachisto"] #chunk { font-weight: 500; }
@@ -373,13 +379,14 @@ textarea[readonly] { color: var(--muted); }
   --rule: #ff2e88; --rule-soft: #4a2766; --field: #2a1240;
   --accent: #ff2e88; --accent-ink: #14061f; --mark: #3a1557; --accent2: #22e6ff;
   --stage-bg: #000;
-  --font-display: "Dela Gothic One", "Zen Kaku Gothic New", sans-serif;
-  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  --font-display: var(--sys-gothic);
+  --font-body: var(--sys-gothic);
+  --font-head: "Dela Gothic One", var(--sys-gothic);
 }
 [data-skin="dopa"] body { font-size: 15px; line-height: 1.7; font-weight: 500; }
 [data-skin="dopa"] header { border-bottom: 4px solid var(--accent2); }
 [data-skin="dopa"] h1 { font-size: 36px; letter-spacing: .02em; color: var(--accent); text-shadow: 3px 3px 0 var(--accent2); font-weight: 400; }
-[data-skin="dopa"] h2 { font-family: var(--font-display); font-weight: 400; letter-spacing: .1em; font-size: 15px; }
+[data-skin="dopa"] h2 { font-family: var(--font-head); font-weight: 400; letter-spacing: .1em; font-size: 15px; }
 [data-skin="dopa"] .panel h2 { flex: none; align-self: flex-start; border: 0; padding: 0 10px; background: var(--accent2); color: var(--bg); }
 [data-skin="dopa"] .stage { border: 4px solid var(--accent); box-shadow: 8px 8px 0 var(--accent2); height: 230px; margin-right: 8px; }
 [data-skin="dopa"] #chunk { font-family: var(--font-body); font-weight: 500; }   /* 表示窓は読みやすさ優先。極太の Dela Gothic One は見出しだけに使う */
@@ -417,7 +424,7 @@ textarea[readonly] { color: var(--muted); }
   --rule: #2c2c2e; --rule-soft: #1c1c1e; --field: #141416;
   --accent: #b38848; --accent-ink: #0c0c0d; --mark: #1b1915;
   --stage-ink: #e2ddd2;
-  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  --font-body: var(--sys-gothic);
 }
 [data-skin="night"] body { font-size: 13.5px; line-height: 1.75; }
 [data-skin="night"] main { gap: 18px; }
