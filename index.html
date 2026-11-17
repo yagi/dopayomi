@@ -584,6 +584,7 @@ textarea[readonly] { color: var(--muted); }
 <script src="kuromoji.js"></script>
 <script id="seglib">
 /* ---- 区切りのロジック（DOMに依存しない） ---- */
+var RE_LATIN_WORD = /^[A-Za-zÀ-ɏ0-9'’\-]+$/;   // 欧文の単語（アクセント付き文字を含む）
 var RE_HIRA = /^[ぁ-ゖゝゞー]+$/;
 var RE_STOP = /^[、。，．！？!?…‥,.;；]+$/;          // ここで区切りを閉じる
 var RE_CLOSE = /^[」』）)\]】〉》”’:：・〜～ー―—\-]+$/;   // 前に付けるが閉じない
@@ -641,7 +642,7 @@ function weight(s) {
 function boundary(a, b) {
   var pa = plain(a), pb = plain(b);
   if (/[、。，．！？!?…‥,.;；:：]$/.test(a)) return Infinity;
-  if (/[A-Za-z0-9]$/.test(pa) && /^[A-Za-z0-9]/.test(pb)) return Infinity;   // 英単語どうしは詰めない
+  if (/[A-Za-zÀ-ɏ0-9]$/.test(pa) && /^[A-Za-zÀ-ɏ0-9]/.test(pb)) return Infinity;   // 欧文の単語どうしは詰めない（空白が消えるため）
   if (RE_OPEN.test(b.charAt(0))) return 2;                         // 開き括弧の前
   if (/^[\u30a1-\u30faー・]+$/.test(pa) && /^[\u4e00-\u9fff\u30a1-\u30fa]/.test(pb)) return -1;   // カタカナ語＋漢字は複合語とみなす（モルダウ｜河の）
   if (RE_STEM.test(pa) && /^[\u4e00-\u9fff]/.test(pb)) return -1;   // 連用形＋漢字は複合語とみなす（泊まり｜客の）
@@ -684,7 +685,7 @@ function splitLong(phrase, maxLen, terms) {
       return;
     }
     if (RE_OPEN.test(tok)) { if (plain(cur).length >= target) flush(); cur += tok; return; }
-    var arr = Array.from(tok), hard = Math.max(maxLen, 12);         // 1語は12字までは割らずに出す
+    var arr = Array.from(tok), hard = RE_LATIN_WORD.test(tok) ? Infinity : Math.max(maxLen, 12);   // 1語は12字まで割らない。欧文の単語は長さによらず割らない
     while (arr.length > hard) { flush(); cur += arr.splice(0, hard).join(''); flush(); }
     tok = arr.join('');
     var n = plain(cur).length;
@@ -895,7 +896,7 @@ function segment(text, mode, maxLen, opts) {
       continue;
     }
     // 1語が上限より長いときは機械的に割る
-    if (tok.length > maxLen) {
+    if (tok.length > maxLen && !RE_LATIN_WORD.test(tok)) {   // 欧文の単語は割らない
       flush();
       var arr = Array.from(tok);
       while (arr.length > maxLen) { start(arr.splice(0, maxLen).join('')); flush(); }
