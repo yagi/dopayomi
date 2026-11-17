@@ -972,7 +972,7 @@ function segment(text, mode, maxLen, opts) {
 // 1区切りの表示時間（ミリ秒）
 function duration(chunk, cpm, pauseScale) {
   var per = 60000 / cpm;
-  var ms = Math.max(250, plainLen(chunk.t) * per * 0.85);   // 下限250ms、字数比例ぶんは0.85倍
+  var ms = Math.max(250 * 900 / cpm, plainLen(chunk.t) * per * 0.85);   // 下限は毎分900字のとき250msで、速度に反比例。字数比例ぶんは0.85倍
   var extra = 0;
   if (/[。．！？!?…]/.test(chunk.t.slice(-2))) extra = per * 2.5;
   else if (/[、，,;；]$/.test(chunk.t)) extra = per * 1.25;
