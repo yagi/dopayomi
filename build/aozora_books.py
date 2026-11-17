@@ -7,6 +7,7 @@ BOOKS = [  # (id, 作家番号, ファイル名)
     ('rashomon', '000879', '127_ruby_150'),
     ('kumonoito', '000879', '92_ruby_164'),
     ('hashiremerosu', '000035', '1567_ruby_4948'),
+    ('kakekomi', '000035', '277_ruby_33097'),
     ('sangetsuki', '000119', '624_ruby_5668'),
     ('chumon', '000081', '43754_ruby_17594'),
     ('yumejuya', '000148', '799_ruby_6024'),
