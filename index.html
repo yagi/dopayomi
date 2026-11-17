@@ -233,7 +233,7 @@ textarea {
 #preview br + br { display: none; }
 
 /* 書棚: 目次のように、題名から状態まで点線でつなぐ */
-#shelf { list-style: none; margin: 0; padding: 0; max-height: 340px; overflow-y: auto; }
+#shelf { list-style: none; margin: 0; padding: 0; }
 .book { position: relative; display: flex; align-items: baseline; gap: 10px; padding: 7px 0 7px 14px; border-bottom: 1px solid var(--rule-soft); }
 .book.current::before { content: ""; position: absolute; left: 0; top: 0; bottom: -1px; width: 3px; background: var(--accent); }   /* 栞紐 */
 .book .open { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; border: 0; padding: 0; letter-spacing: 0; text-align: left; background: transparent; box-shadow: none; font-weight: inherit; color: inherit; }
@@ -1007,7 +1007,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
   function save() { try { localStorage.setItem('rsvp-ja-2', JSON.stringify(st)); } catch (e) {} }
 
   var chunks = [], idx = 0, playing = false, timer = null, spans = [];
-  var cur = { id: 'sample', title: 'ドパ読みの使い方', author: '', kind: 'sample', text: SAMPLE };   // 読んでいる本
+  var cur = { id: 'sample', title: 'Dopayomiの使い方', author: 'Claude', kind: 'sample', text: SAMPLE };   // 読んでいる本
 
   // ---- 読んだ位置の記憶 ----
   // 位置は「本文の何文字目か」で持つ。区切りの番号は設定で変わるため使わない
@@ -1240,7 +1240,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
 
   // ================= 書棚 =================
   // 同梱の本: サンプルと青空文庫（books/ から必要なときに読む）。追加した本: IndexedDB に保存
-  var books = [{ id: 'sample', title: 'ドパ読みの使い方', author: '', kind: 'sample', text: SAMPLE, chars: SAMPLE.replace(/\s/g, '').length }];
+  var books = [{ id: 'sample', title: 'Dopayomiの使い方', author: 'Claude', kind: 'sample', text: SAMPLE, chars: SAMPLE.replace(/\s/g, '').length }];
   var db = null, dbFailed = false;
   function dbOpen() {
     return new Promise(function (res) {
