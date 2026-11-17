@@ -738,8 +738,12 @@ function splitLong(phrase, maxLen, terms) {
 }
 
 // ひとまとめにする語の内側にある文節境界を消す
+// 辞書が漢字表記しか知らず、ひらがなで書くと誤って割られやすい語（じぶん → はじ／ぶん など）。
+// 内側では切らず、直前が助詞か仮名以外なら語の頭で切る
+var HIRA_WORDS = 'じぶん ともだち からだ きもち あたま まっくら まっさお まっしろ ほんとう いっしょ ひとり ふたり みんな こども おとな わたし あなた'.split(' ');
+var RE_SMALL_KANA = /^[ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶー]/;
 function protect(phrases, terms) {
-  if (!terms.length || phrases.length < 2) return phrases;
+  if (phrases.length < 2 && !phrases.some(function (p) { return HIRA_WORDS.some(function (w) { return p.indexOf(w) > 0; }); })) return phrases;
   var text = phrases.join(''), cuts = new Set(), pos = 0;
   for (var i = 0; i < phrases.length - 1; i++) { pos += phrases[i].length; cuts.add(pos); }
   terms.forEach(function (term) {
@@ -747,6 +751,14 @@ function protect(phrases, terms) {
       for (var b = s + 1; b < s + term.length; b++) cuts.delete(b);
     }
   });
+  HIRA_WORDS.forEach(function (w) {
+    for (var s = text.indexOf(w); s >= 0; s = text.indexOf(w, s + 1)) {
+      for (var b = s + 1; b < s + w.length; b++) cuts.delete(b);
+      var before = s > 0 ? text[s - 1] : '';
+      if (s > 0 && (!/[\u3041-\u3096]/.test(before) || /[はがをにのもとでへや]/.test(before))) cuts.add(s);
+    }
+  });
+  cuts.forEach(function (c) { if (RE_SMALL_KANA.test(text.slice(c))) cuts.delete(c); });   // 小書きの仮名や長音の前では切らない
   var out = [], prev = 0;
   Array.from(cuts).sort(function (a, b) { return a - b; }).forEach(function (c) { out.push(text.slice(prev, c)); prev = c; });
   out.push(text.slice(prev));
