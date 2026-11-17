@@ -134,8 +134,11 @@ body.immersive .stage {
 /* 表示窓の書体: 自動はテーマのまま。明朝・ゴシックを選ぶとテーマより優先する */
 .stage.f-mincho #chunk { font-family: var(--sys-mincho); }
 .stage.f-gothic #chunk { font-family: var(--sys-gothic); }
-/* ルビ: 親文字の幅を変えないよう、読みは親文字の上に浮かせる（中心の計算にも影響しない） */
-#chunk .rb { position: relative; }
+/* ルビ: 親文字の幅を変えないよう、読みは親文字の上に浮かせる（中心の計算にも影響しない）。
+   iOS の Safari は箱からはみ出して描いた部分を描き直さず残すことがあるため、
+   表示窓の文字の箱に上下の余白を取ってルビをその内側に収め、文字の層も独立させる */
+#chunk { padding: .6em 0; transform: translateZ(0); }
+#chunk .rb { position: relative; display: inline-block; }
 #chunk .rt {
   position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%);
   font-size: .42em; line-height: 1; white-space: nowrap; letter-spacing: .04em;
@@ -1220,8 +1223,9 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     if (!core) { core = t; lead = trail = ''; }
     el.chunk.children[0].textContent = lead;
     el.chunk.children[2].textContent = trail;
-    var coreEl = el.chunk.children[1];
-    coreEl.textContent = '';
+    var coreEl = document.createElement('span');   // 中身を消して入れ直すのではなく、要素ごと差し替える（描き残し対策）
+    coreEl.className = 'core';
+    el.chunk.replaceChild(coreEl, el.chunk.children[1]);
     function putText(parent, s) {   // かな・句読点の連続だけ別の span にする（大きさを別に指定するため）
       s.split(/([\u3041-\u30ff、。，．！？!?…‥「」『』（）()\[\]【】〈〉《》“”‘’:：・,.;；]+)/).forEach(function (part, n) {
         if (!part) return;
