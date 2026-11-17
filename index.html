@@ -1406,7 +1406,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
         if (!x[1] && x[0] !== 'leader') return;
         var s = document.createElement('span'); s.className = x[0]; s.textContent = x[1]; open.appendChild(s);
       });
-      open.addEventListener('click', function () { openBook(b.id); });
+      open.addEventListener('click', function () { openBook(b.id, true); });
       li.appendChild(open);
       if (b.kind === 'user') {   // 削除は2回押しで確定する（確認ダイアログは使えないため）
         var del = document.createElement('button');
@@ -1436,7 +1436,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
       return ruby.then(function (rb) { b.ruby = rb; b.text = t.replace(/\n+$/, ''); return b.text; });
     });
   }
-  function openBook(id) {
+  function openBook(id, fromUser) {
     var b = books.filter(function (x) { return x.id === id; })[0] || books[0];
     if (playing) setPlaying(false); else if (cur.id !== b.id && chunks.length) savePos();
     cur = { id: b.id, title: b.title, author: b.author, kind: b.kind, text: '', ruby: [], loading: true };
@@ -1447,6 +1447,10 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
       cur.text = text; cur.ruby = b.ruby || []; cur.loading = false;
       showText(b);
       rebuild(false); restorePos(); renderShelf();
+      if (fromUser && window.matchMedia('(max-width: 760px)').matches) {   // スマホでは、書棚から選んだら表示窓まで戻す
+        var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        window.scrollTo({ top: 0, behavior: still ? 'auto' : 'smooth' });
+      }
     }, function () {
       if (cur.id !== b.id) return;
       cur.loading = false;
@@ -1524,7 +1528,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     if (!ruby || !ruby.length) { raw = raw.replace(/\r\n?/g, '\n').replace(/^\n+|\s+$/g, ''); ruby = []; }
     var b = addBook(title || raw.trim().slice(0, 12), author, raw, pendingColophon, ruby);
     resetForm(); form.hidden = true;
-    openBook(b.id);
+    openBook(b.id, true);
   });
 
   document.addEventListener('keydown', function (e) {
