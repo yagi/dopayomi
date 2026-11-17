@@ -213,6 +213,28 @@ textarea {
 #preview span:hover { background: var(--mark); }
 #preview span.now { background: var(--accent); color: var(--accent-ink); border-radius: 3px; border-right-color: transparent; }
 #preview br + br { display: none; }
+
+/* 書棚 */
+#shelf { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+.book { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line-soft); border-radius: 8px; padding: 8px 10px; }
+.book.current { border-color: var(--accent); background: var(--mark); }
+.book .open { flex: 1; min-width: 0; text-align: left; border: 0; background: none; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.book .open:hover .title { text-decoration: underline; }
+.book .title { font-weight: 700; }
+.book .meta { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.book .bar { width: 64px; height: 4px; border-radius: 2px; background: var(--line-soft); flex: none; overflow: hidden; }
+.book .bar i { display: block; height: 100%; background: var(--accent); }
+.book .del { font-size: 12.5px; padding: 4px 8px; }
+.book .del.confirm { border-color: #c0392b; color: #c0392b; }
+.addform { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.addform[hidden] { display: none; }
+.addform textarea { min-height: 110px; }
+.addform .row { justify-content: flex-start; }
+.filebtn { cursor: pointer; }
+.filebtn input { font: inherit; font-size: 12.5px; }
+details > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+details[open] > summary { margin-bottom: 8px; }
+textarea[readonly] { opacity: .85; }
 </style>
 </head>
 <body>
@@ -297,10 +319,28 @@ textarea {
 
     <section class="panel" aria-labelledby="h-text">
       <div class="row">
-        <h2 id="h-text">本文</h2>
-        <button id="sample" type="button">サンプル文に戻す</button>
+        <h2 id="h-text">書棚</h2>
+        <button id="addBook" type="button">本を追加</button>
       </div>
-      <textarea id="text" spellcheck="false" aria-label="読む本文"></textarea>
+      <form class="addform" id="addForm" hidden>
+        <input type="text" id="newTitle" placeholder="題名" autocomplete="off" aria-label="題名">
+        <input type="text" id="newAuthor" placeholder="著者（なくても可）" autocomplete="off" aria-label="著者">
+        <textarea id="newText" spellcheck="false" placeholder="本文を貼り付けるか、下からテキストファイルを読み込みます" aria-label="追加する本文"></textarea>
+        <label class="filebtn hint">テキストファイル（.txt）を読み込む: <input type="file" id="newFile" accept=".txt,text/plain"></label>
+        <p class="hint">Shift_JIS のファイルも読めます。青空文庫のルビ・注記・底本情報は自動で取り除きます。</p>
+        <div class="row">
+          <button class="primary" type="submit" id="addSave">書棚に追加</button>
+          <button type="button" id="addCancel">やめる</button>
+          <span class="hint" id="addNote"></span>
+        </div>
+      </form>
+      <ul id="shelf" aria-label="書棚の本"></ul>
+      <p class="hint" id="shelfNote"></p>
+      <details id="textBox">
+        <summary>本文を表示</summary>
+        <textarea id="text" spellcheck="false" aria-label="読んでいる本の本文"></textarea>
+        <p class="hint" id="textNote"></p>
+      </details>
       <div class="row">
         <h2>区切りの確認</h2>
         <span class="check"><input type="checkbox" id="follow"><label for="follow">読んでいる位置に合わせてスクロール</label></span>
@@ -479,11 +519,15 @@ function detectTerms(text, parser) {
     }
   });
   var found = [];
+  var sufCount = {};
   Object.keys(cands).sort(function (a, b) { return a.length - b.length; }).forEach(function (key) {
+    if (cands[key] < 2) return;   // 文節境界をまたいで2回以上出たものだけを数える（長い本で遅くならないように）
     var suf = key.split('\u0000')[0], term = key.replace('\u0000', '');
     if (found.some(function (f) { return term.indexOf(f) >= 0; })) return;   // 短い形がすでに採用済み
     var total = countOcc(text, term);
-    if (total >= 3 && total / countOcc(text, suf) >= 0.8) found.push(term);
+    if (total < 3) return;
+    if (!(suf in sufCount)) sufCount[suf] = countOcc(text, suf);
+    if (total / sufCount[suf] >= 0.8) found.push(term);
   });
   return found;
 }
@@ -508,19 +552,24 @@ function segmentBunsetsu(text, maxLen, opts) {
     var joined = phrases.map(function (ph) { return { t: ph, first: ph, last: ph }; });
     if (opts.merge) {
       // 切れ目の弱い境界から順につなげ、目安の重さに収まるかぎり続ける
+      // 長い本でも速いよう、各文節の重さと境界の強さは覚えておき、つなげた周りだけ計算し直す
+      var wts = joined.map(function (j) { return weight(j.t); });
+      var bnd = joined.slice(0, -1).map(function (j, i) { return boundary(j.last, joined[i + 1].first); });
       for (;;) {
         var best = -1, bestS = Infinity, bestW = Infinity;
-        for (var i = 0; i < joined.length - 1; i++) {
-          var s = boundary(joined[i].last, joined[i + 1].first);
-          if (s === Infinity) continue;
-          var w = weight(joined[i].t) + weight(joined[i + 1].t);
+        for (var i = 0; i < bnd.length; i++) {
+          var s = bnd[i];
+          if (s === Infinity || s > bestS) continue;
+          var w = wts[i] + wts[i + 1];
           if (w > (s >= 2 ? maxLen * 0.75 : maxLen)) continue;
-          if (s < bestS || (s === bestS && w < bestW)) { best = i; bestS = s; bestW = w; }
+          if (s < bestS || w < bestW) { best = i; bestS = s; bestW = w; }
         }
         if (best < 0) break;
         joined[best].t += joined[best + 1].t;
         joined[best].last = joined[best + 1].last;
         joined.splice(best + 1, 1);
+        wts.splice(best, 2, wts[best] + wts[best + 1]);
+        bnd.splice(best, 1);   // つなげた境界を消す。左右の境界は文節の端が変わらないので強さも同じ
       }
       // ごく短い区切りが残ったら、目安を少し超えてでも隣に寄せる
       for (var k = 0; k < joined.length; k++) {
@@ -651,7 +700,38 @@ function duration(chunk, cpm, pauseScale) {
   if (chunk.para) extra = per * 4;
   return ms + extra * pauseScale;
 }
-if (typeof module !== 'undefined') module.exports = { segment: segment, duration: duration, posPhrases: posPhrases };
+// ---- 青空文庫形式のテキストを読める本文にする（ルビ・注記・底本情報を取り除く） ----
+// JIS X 0213 の面区点でしか示されていない外字は、ブラウザ内では引けないので〓にする
+function isAozora(raw) { return /《[^》\n]+》|［＃[^］\n]*］|\n底本：/.test(raw); }
+function aozoraClean(raw) {
+  raw = raw.replace(/\r\n?/g, '\n');
+  // 1行目が題名・2行目が著者になるのは、配布ファイルそのまま（記号説明の囲みか底本情報がある）のときだけ
+  var whole = /\n-{20,}\n/.test(raw) || /\n底本：/.test(raw);
+  var lines = raw.split('\n');
+  var title = whole ? (lines[0] || '').trim() : '', author = whole ? (lines[1] || '').trim() : '';
+  var body = whole ? lines.slice(2).join('\n') : raw;
+  var parts = body.split(/\n-{20,}\n/);
+  if (parts.length >= 3 && /記号/.test(parts[1])) body = parts.slice(2).join('\n');
+  var m = body.match(/\n\n+底本：/);
+  var colophon = '';
+  if (m) { colophon = body.slice(m.index).trim(); body = body.slice(0, m.index); }
+  body = body.replace(/※［＃([^］]*)］/g, function (_, note) {
+    var u = note.match(/U\+([0-9A-Fa-f]{4,6})/);
+    if (u) return String.fromCodePoint(parseInt(u[1], 16));
+    var s = note.match(/小書き(?:平仮名|片仮名)(.)/);
+    if (s) return s[1];
+    return '〓';
+  });
+  body = body.replace(/［＃[^］]*］/g, '')
+    .replace(/｜([^《｜\n]*)《[^》]*》/g, '$1')
+    .replace(/《[^》]*》/g, '')
+    .replace(/｜/g, '')
+    .replace(/[ \t　]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^\n+|\n+$/g, '');
+  return { title: title, author: author, text: body, colophon: colophon };
+}
+if (typeof module !== 'undefined') module.exports = { segment: segment, duration: duration, posPhrases: posPhrases, aozoraClean: aozoraClean, isAozora: isAozora };
 </script>
 
 <script>
@@ -679,7 +759,8 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     text: $('text'), preview: $('preview'), cpm: $('cpm'), cpmOut: $('cpmOut'), maxLen: $('maxLen'), maxLenOut: $('maxLenOut'),
     maxLenLabel: $('maxLenLabel'), maxLenHint: $('maxLenHint'), pause: $('pause'), pauseOut: $('pauseOut'), gothic: $('gothic'), merge: $('merge'), autofull: $('autofull'), fullNote: $('fullNote'), immersive: $('immersive'), follow: $('follow'), fsKanji: $('fsKanji'), fsKanjiOut: $('fsKanjiOut'), fsKana: $('fsKana'), fsKanaOut: $('fsKanaOut'), terms: $('terms'), auto: $('auto'), detected: $('detected'), modeHint: $('modeHint') };
 
-  var st = { v3: true, mode: 'bunsetsu', cpm: 900, maxLen: 5, pause: 1.2, gothic: false, immersive: false, autofull: false, follow: true, fsKanji: 70, fsKana: 65, merge: true, terms: '', auto: true, text: SAMPLE };
+  var st = { v3: true, v4: true, mode: 'bunsetsu', cpm: 900, maxLen: 5, pause: 1.2, gothic: false, immersive: true, autofull: false, follow: true, fsKanji: 70, fsKana: 65, merge: true, terms: '', auto: true, book: 'sample' };
+  var legacyText = null;   // 書棚ができる前に保存していた本文（あれば「前回の本文」として書棚に移す）
   try {
     var saved = JSON.parse(localStorage.getItem('rsvp-ja-2') || 'null');
     if (!saved) {   // 旧設定からは速度と間を引き継がない（目盛りが変わったため）
@@ -688,11 +769,14 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     if (saved && !saved.v3) { delete saved.maxLen; }
     }
     if (saved && saved.smallkana) { saved.fsKana = 90; }
+    if (saved && !saved.v4) { saved.immersive = true; saved.v4 = true; }   // UI消去を既定でオンにした版への移行
+    if (saved && typeof saved.text === 'string') { if (saved.text.trim() && saved.text !== SAMPLE) legacyText = saved.text; delete saved.text; }
     if (saved) { delete saved.smallkana; Object.assign(st, saved); }
   } catch (e) {}
   function save() { try { localStorage.setItem('rsvp-ja-2', JSON.stringify(st)); } catch (e) {} }
 
   var chunks = [], idx = 0, playing = false, timer = null, spans = [];
+  var cur = { id: 'sample', title: 'ドパ読みの使い方', author: '', kind: 'sample', text: SAMPLE };   // 読んでいる本
 
   // ---- 読んだ位置の記憶 ----
   // 位置は「本文の何文字目か」で持つ。区切りの番号は設定で変わるため使わない
@@ -702,7 +786,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     return s.length + ':' + x.toString(16);
   }
   function assignStarts() {   // 各区切りが本文の何文字目から始まるかを求める（区切りは空白・改行を除いて本文と同じ順に並ぶ）
-    var text = st.text, p = 0;
+    var text = cur.text, p = 0;
     chunks.forEach(function (c) {
       while (p < text.length && /\s/.test(text[p])) p++;
       c.start = p;
@@ -721,17 +805,29 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     while (i > 0 && !/[。．！？!?…]/.test(chunks[i - 1].t.slice(-2)) && !chunks[i - 1].para) i--;
     return i;
   }
-  var POS_KEY = 'rsvp-ja-pos';
+  // 本ごとの読んだ位置: { 本のid: { hash, offset, pct, done } }。本文が保存時と違えば冒頭から
+  var PROG_KEY = 'dopayomi-progress';
+  var progress = {};
+  try { progress = JSON.parse(localStorage.getItem(PROG_KEY) || '{}') || {}; } catch (e) {}
+  try {   // 書棚ができる前の読んだ位置を引き継ぐ
+    var oldPos = JSON.parse(localStorage.getItem('rsvp-ja-pos') || 'null');
+    if (oldPos && legacyText) progress.legacy = { hash: oldPos.hash, offset: oldPos.offset, pct: 0 };
+    localStorage.removeItem('rsvp-ja-pos');
+  } catch (e) {}
+  function saveProgress() { try { localStorage.setItem(PROG_KEY, JSON.stringify(progress)); } catch (e) {} }
   function savePos() {
     if (!chunks.length) return;
-    try { localStorage.setItem(POS_KEY, JSON.stringify({ hash: hashText(st.text), offset: chunks[idx].start })); } catch (e) {}
+    progress[cur.id] = { hash: hashText(cur.text), offset: chunks[idx].start, pct: chunks.length > 1 ? idx / (chunks.length - 1) : 0 };
+    saveProgress(); renderShelf();
   }
-  function clearPos() { try { localStorage.removeItem(POS_KEY); } catch (e) {} }
-  function restorePos() {   // 本文が保存時と同じときだけ、その文の頭から再開する。違えば冒頭から
-    var saved = null;
-    try { saved = JSON.parse(localStorage.getItem(POS_KEY) || 'null'); } catch (e) {}
-    if (!saved || saved.hash !== hashText(st.text)) { clearPos(); return; }
-    idx = sentenceStartOf(indexAt(saved.offset));
+  function markDone() {   // 読み終えたら、次は冒頭から始める
+    progress[cur.id] = { hash: hashText(cur.text), offset: 0, pct: 1, done: true };
+    saveProgress(); renderShelf();
+  }
+  function restorePos() {
+    var p = progress[cur.id];
+    if (!p || p.done || p.hash !== hashText(cur.text)) return;
+    idx = sentenceStartOf(indexAt(p.offset));
     show();
   }
 
@@ -761,7 +857,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     if (st.mode === 'pos') loadKuromoji();
     var mode = st.mode === 'pos' && !window.BudouXJa && kuro.state !== 'ready' ? 'bunsetsu' : st.mode;
     var opts = { merge: st.merge, parser: currentParser(), auto: st.auto, terms: st.terms.split(/[\s、,，]+/).filter(Boolean) };
-    chunks = segment(st.text, mode, st.maxLen, opts);
+    chunks = segment(cur.text, mode, st.maxLen, opts);
     assignStarts();
     var det = opts.detected || [];
     el.detected.textContent = !phraseMode() || !opts.parser ? '文節・品詞モードでのみ使えます。'
@@ -783,7 +879,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
 
   function show() {
     var c = chunks[idx];
-    var t = c ? c.t : '本文を入れてください';
+    var t = c ? c.t : (cur.loading ? '読み込み中…' : '本文がありません');
     var lead = (t.match(/^[「『（(\[【〈《“‘、。，．！？!?…‥,.;；:：・\s]+/) || [''])[0];
     var rest = t.slice(lead.length);
     var trail = (rest.match(/[」』）)\]】〉》”’、。，．！？!?…‥,.;；:：・\s]+$/) || [''])[0];
@@ -800,10 +896,10 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     });
     el.seek.value = idx;
     spans.forEach(function (s, i) { s.classList.toggle('now', i === idx); });
-    var cur = spans[idx];
-    if (cur && st.follow) {
+    var curSpan = spans[idx];
+    if (curSpan && st.follow) {
       // #preview は position: relative なので、offsetTop は枠の内側からの距離になる
-      var p = el.preview, top = cur.offsetTop, line = cur.offsetHeight;
+      var p = el.preview, top = curSpan.offsetTop, line = curSpan.offsetHeight;
       if (top < p.scrollTop + line || top > p.scrollTop + p.clientHeight - line * 2) p.scrollTop = Math.max(0, top - p.clientHeight / 3);
     }
     var rest = 0;
@@ -816,7 +912,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
   function tick() {
     if (!playing) return;
     timer = setTimeout(function () {
-      if (idx >= chunks.length - 1) { setPlaying(false); clearPos(); return; }   // 読み終えたら記憶を消す
+      if (idx >= chunks.length - 1) { setPlaying(false); markDone(); return; }
       idx++; show(); tick();
     }, duration(chunks[idx], st.cpm, st.pause));
   }
@@ -880,10 +976,12 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
   el.preview.addEventListener('click', function (e) { if (e.target.dataset && e.target.dataset.i) go(+e.target.dataset.i); });
   el.cpm.addEventListener('input', function () { st.cpm = +el.cpm.value; syncUI(); show(); save(); });
   el.pause.addEventListener('input', function () { st.pause = +el.pause.value; syncUI(); show(); save(); });
-  el.maxLen.addEventListener('input', function () { st.maxLen = +el.maxLen.value; syncUI(); rebuild(true); save(); });
+  var rebuildTimer = null;
+  function rebuildSoon() { clearTimeout(rebuildTimer); rebuildTimer = setTimeout(function () { rebuild(true); }, 200); }   // 長い本でスライダーが重くならないように
+  el.maxLen.addEventListener('input', function () { st.maxLen = +el.maxLen.value; syncUI(); rebuildSoon(); save(); });
   el.merge.addEventListener('change', function () { st.merge = el.merge.checked; rebuild(true); save(); });
   el.auto.addEventListener('change', function () { st.auto = el.auto.checked; rebuild(true); save(); });
-  el.terms.addEventListener('input', function () { st.terms = el.terms.value; rebuild(true); save(); });
+  el.terms.addEventListener('input', function () { st.terms = el.terms.value; rebuildSoon(); save(); });
   el.fsKanji.addEventListener('input', function () { st.fsKanji = +el.fsKanji.value; syncUI(); save(); });
   el.fsKana.addEventListener('input', function () { st.fsKana = +el.fsKana.value; syncUI(); save(); });
   el.follow.addEventListener('change', function () { st.follow = el.follow.checked; show(); save(); });
@@ -891,7 +989,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
   el.autofull.addEventListener('change', function () { st.autofull = el.autofull.checked; el.fullNote.hidden = true; save(); });
   $('copySettings').addEventListener('click', function () {   // 本文を除いた設定を文字列にしてコピーする
     var out = {};
-    Object.keys(st).forEach(function (k) { if (k !== 'text' && k !== 'v3') out[k] = st[k]; });
+    Object.keys(st).forEach(function (k) { if (!/^(text|v3|v4|book)$/.test(k)) out[k] = st[k]; });
     var s = JSON.stringify(out);
     var box = $('settingsOut'), note = $('copyNote');
     box.value = s; box.hidden = false; box.select();
@@ -903,8 +1001,166 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
   document.querySelectorAll('input[name="mode"]').forEach(function (r) {
     r.addEventListener('change', function () { st.mode = r.value; syncUI(); rebuild(true); save(); });
   });
-  el.text.addEventListener('input', function () { st.text = el.text.value; setPlaying(false); rebuild(false); save(); savePos(); });
-  $('sample').addEventListener('click', function () { st.text = SAMPLE; el.text.value = SAMPLE; setPlaying(false); rebuild(false); save(); savePos(); });
+
+  // ================= 書棚 =================
+  // 同梱の本: サンプルと青空文庫（books/ から必要なときに読む）。追加した本: IndexedDB に保存
+  var books = [{ id: 'sample', title: 'ドパ読みの使い方', author: '', kind: 'sample', text: SAMPLE, chars: SAMPLE.replace(/\s/g, '').length }];
+  var db = null, dbFailed = false;
+  function dbOpen() {
+    return new Promise(function (res) {
+      try {
+        var r = indexedDB.open('dopayomi', 1);
+        r.onupgradeneeded = function () { r.result.createObjectStore('books', { keyPath: 'id' }); };
+        r.onsuccess = function () { res(r.result); };
+        r.onerror = function () { res(null); };
+      } catch (e) { res(null); }
+    });
+  }
+  function dbReq(mode, fn) {
+    return new Promise(function (res) {
+      if (!db) { res(null); return; }
+      try {
+        var tx = db.transaction('books', mode), q = fn(tx.objectStore('books'));
+        tx.oncomplete = function () { res(q && q.result); };
+        tx.onerror = tx.onabort = function () { res(null); };
+      } catch (e) { res(null); }
+    });
+  }
+  function userBookRecord(b) { return { id: b.id, title: b.title, author: b.author, text: b.text, colophon: b.colophon || '', added: b.added }; }
+
+  function fmtChars(n) { return n.toLocaleString('ja-JP') + '字'; }
+  function renderShelf() {
+    var ul = $('shelf');
+    ul.textContent = '';
+    books.forEach(function (b) {
+      var li = document.createElement('li');
+      li.className = 'book' + (b.id === cur.id ? ' current' : '');
+      var open = document.createElement('button');
+      open.type = 'button'; open.className = 'open';
+      var t = document.createElement('span'); t.className = 'title'; t.textContent = b.title || '（無題）';
+      var p = progress[b.id], pct = p ? Math.round((p.pct || 0) * 100) : 0;
+      var state = p && p.done ? '読了' : p && p.pct > 0 ? pct + '%' : '未読';
+      var kind = b.kind === 'aozora' ? '青空文庫' : b.kind === 'user' ? '追加した本' : '';
+      var m = document.createElement('span'); m.className = 'meta';
+      m.textContent = [b.author, b.chars ? fmtChars(b.chars) : '', kind, state].filter(Boolean).join(' · ');
+      open.appendChild(t); open.appendChild(m);
+      open.addEventListener('click', function () { openBook(b.id); });
+      li.appendChild(open);
+      var bar = document.createElement('span'); bar.className = 'bar';
+      var fill = document.createElement('i'); fill.style.width = (p && p.done ? 100 : pct) + '%'; bar.appendChild(fill);
+      li.appendChild(bar);
+      if (b.kind === 'user') {   // 削除は2回押しで確定する（確認ダイアログは使えないため）
+        var del = document.createElement('button');
+        del.type = 'button'; del.className = 'del'; del.textContent = '削除';
+        del.addEventListener('click', function () {
+          if (!del.classList.contains('confirm')) {
+            del.classList.add('confirm'); del.textContent = 'もう一度押すと削除';
+            setTimeout(function () { del.classList.remove('confirm'); del.textContent = '削除'; }, 3000);
+            return;
+          }
+          removeBook(b.id);
+        });
+        li.appendChild(del);
+      }
+      ul.appendChild(li);
+    });
+    $('shelfNote').textContent = dbFailed ? 'この環境では追加した本を保存できないため、ページを閉じると消えます。' : '';
+  }
+
+  function loadText(b) {
+    if (typeof b.text === 'string') return Promise.resolve(b.text);
+    return fetch('books/' + b.id + '.txt').then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+      return r.text();
+    }).then(function (t) { b.text = t.replace(/\n+$/, ''); return b.text; });
+  }
+  function openBook(id) {
+    var b = books.filter(function (x) { return x.id === id; })[0] || books[0];
+    if (playing) setPlaying(false); else if (cur.id !== b.id && chunks.length) savePos();
+    cur = { id: b.id, title: b.title, author: b.author, kind: b.kind, text: '', loading: true };
+    st.book = b.id; save();
+    chunks = []; rebuild(false); renderShelf();
+    loadText(b).then(function (text) {
+      if (cur.id !== b.id) return;
+      cur.text = text; cur.loading = false;
+      showText(b);
+      rebuild(false); restorePos(); renderShelf();
+    }, function () {
+      if (cur.id !== b.id) return;
+      cur.loading = false;
+      $('shelfNote').textContent = '「' + b.title + '」を読み込めませんでした。';
+      showText(b); rebuild(false);
+    });
+  }
+  function showText(b) {
+    el.text.value = cur.text;
+    el.text.readOnly = b.kind !== 'user';
+    $('textNote').textContent = b.kind === 'user' ? '書き換えると保存されます。本文が変わると読んだ位置は冒頭に戻ります。'
+      : b.kind === 'aozora' ? '青空文庫の本は書き換えられません。'
+      : 'サンプルは書き換えられません。';
+    if (b.kind === 'aozora' && b.card) {
+      var a = document.createElement('a'); a.href = b.card; a.textContent = '図書カード（青空文庫）'; a.target = '_blank'; a.rel = 'noopener';
+      $('textNote').appendChild(document.createTextNode(' ')); $('textNote').appendChild(a);
+    }
+  }
+  var editTimer = null;
+  el.text.addEventListener('input', function () {
+    if (cur.kind !== 'user') return;
+    cur.text = el.text.value;
+    setPlaying(false); clearTimeout(rebuildTimer); rebuildTimer = setTimeout(function () { rebuild(false); }, 300);
+    var b = books.filter(function (x) { return x.id === cur.id; })[0];
+    if (b) {
+      b.text = cur.text; b.chars = cur.text.replace(/\s/g, '').length;
+      clearTimeout(editTimer);
+      editTimer = setTimeout(function () { dbReq('readwrite', function (s) { return s.put(userBookRecord(b)); }); renderShelf(); }, 500);
+    }
+  });
+
+  function addBook(title, author, text, colophon) {
+    var b = { id: 'u' + Date.now().toString(36), title: title, author: author, kind: 'user', text: text, colophon: colophon || '', chars: text.replace(/\s/g, '').length, added: Date.now() };
+    books.push(b);
+    dbReq('readwrite', function (s) { return s.put(userBookRecord(b)); });
+    return b;
+  }
+  function removeBook(id) {
+    books = books.filter(function (x) { return x.id !== id; });
+    delete progress[id]; saveProgress();
+    dbReq('readwrite', function (s) { return s.delete(id); });
+    if (cur.id === id) openBook('sample'); else renderShelf();
+  }
+
+  // ---- 本の追加フォーム ----
+  var form = $('addForm'), pendingColophon = '';
+  function resetForm() { form.reset(); pendingColophon = ''; $('addNote').textContent = ''; }
+  $('addBook').addEventListener('click', function () { form.hidden = !form.hidden; if (!form.hidden) $('newTitle').focus(); });
+  $('addCancel').addEventListener('click', function () { resetForm(); form.hidden = true; });
+  $('newFile').addEventListener('change', function () {
+    var f = this.files && this.files[0];
+    if (!f) return;
+    f.arrayBuffer().then(function (buf) {
+      var raw;
+      try { raw = new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+      catch (e) { raw = new TextDecoder('shift_jis').decode(buf); }   // UTF-8 として読めなければ Shift_JIS とみなす
+      raw = raw.replace(/^\uFEFF/, '');
+      var title = f.name.replace(/\.[^.]+$/, ''), author = '';
+      if (isAozora(raw)) { var a = aozoraClean(raw); raw = a.text; title = a.title || title; author = a.author; pendingColophon = a.colophon; }
+      $('newText').value = raw;
+      if (!$('newTitle').value) $('newTitle').value = title;
+      if (!$('newAuthor').value) $('newAuthor').value = author;
+      $('addNote').textContent = '読み込みました（' + fmtChars(raw.replace(/\s/g, '').length) + '）。';
+    }, function () { $('addNote').textContent = 'ファイルを読めませんでした。'; });
+  });
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var raw = $('newText').value, title = $('newTitle').value.trim(), author = $('newAuthor').value.trim();
+    if (!raw.trim()) { $('addNote').textContent = '本文が空です。'; return; }
+    if (isAozora(raw)) {   // 貼り付けた青空文庫のテキストも整形する
+      var a = aozoraClean(raw); raw = a.text; title = title || a.title; author = author || a.author; pendingColophon = pendingColophon || a.colophon;
+    }
+    var b = addBook(title || raw.trim().slice(0, 12), author, raw.replace(/\r\n?/g, '\n').replace(/^\n+|\s+$/g, ''), pendingColophon);
+    resetForm(); form.hidden = true;
+    openBook(b.id);
+  });
 
   document.addEventListener('keydown', function (e) {
     if (playing && document.body.classList.contains('immersive')) { e.preventDefault(); setPlaying(false); return; }   // 没入モードの再生中はどのキーでも止めて戻す
@@ -922,10 +1178,26 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') savePos(); });
   window.addEventListener('pagehide', savePos);
 
-  el.text.value = st.text;
   syncUI();
-  rebuild(false);
-  restorePos();
+  renderShelf();
+  dbOpen().then(function (d) {
+    db = d; dbFailed = !d;
+    return dbReq('readonly', function (s) { return s.getAll(); });
+  }).then(function (list) {
+    (list || []).sort(function (a, b) { return a.added - b.added; }).forEach(function (r) {
+      books.push({ id: r.id, title: r.title, author: r.author, kind: 'user', text: r.text, colophon: r.colophon, chars: r.text.replace(/\s/g, '').length, added: r.added });
+    });
+    if (legacyText) {   // 書棚ができる前の本文を移す
+      var b = addBook('前回の本文', '', legacyText);
+      if (progress.legacy) { progress[b.id] = progress.legacy; delete progress.legacy; saveProgress(); }
+      st.book = b.id; legacyText = null; save();
+    }
+    return fetch('books/index.json').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; });
+  }).then(function (list) {
+    var aoz = (list || []).map(function (x) { return { id: x.id, title: x.title, author: x.author, kind: 'aozora', chars: x.chars, card: x.card, colophon: x.colophon }; });
+    books.splice.apply(books, [1, 0].concat(aoz));   // サンプルの次に青空文庫の本を並べる
+    openBook(books.some(function (x) { return x.id === st.book; }) ? st.book : 'sample');
+  });
 })();
 </script>
 </body>
