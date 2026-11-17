@@ -195,7 +195,7 @@ input[type="checkbox"] { accent-color: var(--ink); }
   .keys { display: none; }
 }
 .panel { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.panel h2 { border-bottom: 1px solid var(--rule); padding-bottom: 4px; flex: 1; }
+.panel h2 { border-bottom: 1px solid var(--rule); padding-bottom: 4px; flex: 1; white-space: nowrap; }
 .field { display: flex; flex-direction: column; gap: 2px; }
 .field label, .field .label { display: flex; justify-content: space-between; gap: 8px; }
 .field output { color: var(--accent); font-variant-numeric: tabular-nums; }
@@ -502,7 +502,6 @@ textarea[readonly] { color: var(--muted); }
     <button class="navbtn" id="nextBtn" type="button" aria-label="1つ進む">▶</button>
     <span class="check"><input type="checkbox" id="immersive"><label for="immersive">UI消去</label></span>
     <span class="check" id="autofullBox"><input type="checkbox" id="autofull"><label for="autofull">全画面化</label></span>
-    <button id="restart" type="button">最初に戻る</button>
     <span class="keys"><kbd>Space</kbd> 再生／停止　<kbd>←</kbd><kbd>→</kbd> 前後　<kbd>↑</kbd><kbd>↓</kbd> 速度</span>
   </div>
 
@@ -608,6 +607,7 @@ textarea[readonly] { color: var(--muted); }
       <div class="row">
         <h2>区切りの確認</h2>
         <span class="check"><input type="checkbox" id="follow"><label for="follow">自動スクロール</label></span>
+        <button id="restart" type="button">最初に戻る</button>
       </div>
       <div id="preview"></div>
       <p class="hint">クリックした位置から読めます。</p>
