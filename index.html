@@ -56,6 +56,8 @@
   --mark: #2d2b26;
 }
 * { box-sizing: border-box; }
+/* iPhone の Safari で、ボタンを素早く続けて押したときにダブルタップの拡大が起きないようにする（ピンチでの拡大はそのまま） */
+html, body, button, label, input, .stage, #preview, #shelf { touch-action: manipulation; }
 html, body { margin: 0; }
 body {
   background: var(--bg);
