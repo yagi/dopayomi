@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>日本語RSVPリーダー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* レイアウト: 上に視線固定の表示枠、その下に操作列、さらに下で「設定」と「本文・区切り確認」を2カラム。 */
+:root {
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --ink: #1b2330;
+  --muted: #5d6878;
+  --line: #d3d9e2;
+  --line-soft: #e8ecf1;
+  --field: #dfe4eb;
+  --accent: #2c4a9a;
+  --accent-ink: #ffffff;
+  --mark: #dfe7fb;
+  --font-display: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #12161d;
+    --surface: #1b212b;
+    --ink: #e8ecf2;
+    --muted: #98a3b3;
+    --line: #313a48;
+    --line-soft: #252c37;
+    --field: #0b0e13;
+    --accent: #8fb0ff;
+    --accent-ink: #10192c;
+    --mark: #2a3a63;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #12161d;
+  --surface: #1b212b;
+  --ink: #e8ecf2;
+  --muted: #98a3b3;
+  --line: #313a48;
+  --line-soft: #252c37;
+  --field: #0b0e13;
+  --accent: #8fb0ff;
+  --accent-ink: #10192c;
+  --mark: #2a3a63;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.7;
+}
+main {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 20px 16px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+h1 { font-size: 18px; margin: 0; font-weight: 700; letter-spacing: .04em; }
+header p { margin: 0; color: var(--muted); font-size: 13px; }
+h2 { font-size: 13px; margin: 0; color: var(--muted); font-weight: 700; letter-spacing: .08em; }
+
+.stage {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+}
+.stage::before, .stage::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 2px;
+  height: 22px;
+  margin-left: -1px;
+  background: var(--accent);
+}
+.stage::before { top: calc(50% - 76px); }
+.stage::after { bottom: calc(50% - 76px); }
+/* 再生中は表示枠だけを画面いっぱいに広げ、ほかの操作部品を覆い隠す */
+body.immersive { overflow: hidden; }
+body.immersive .stage {
+  position: fixed;
+  inset: 0;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  z-index: 10;
+  cursor: none;
+}
+#chunk {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: calc(clamp(26px, 6.4vw, 58px) * var(--fs-kanji, 1));
+  white-space: nowrap;
+  line-height: 1.2;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;   /* 中央列＝句読点を除いた本体。前後の記号は左右の列に逃がす */
+  align-items: baseline;                 /* 列ごとに文字の大きさが違っても、ベースラインで揃える */
+}
+#chunk .lead { text-align: right; }
+#chunk .trail { text-align: left; }
+#chunk .kana { font-size: calc(1em * var(--fs-kana, 1) / var(--fs-kanji, 1)); }
+.stage.gothic #chunk { font-family: var(--font-body); }
+
+.bar { display: flex; flex-direction: column; gap: 6px; }
+#seek { width: 100%; accent-color: var(--accent); margin: 0; }
+.stats { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+
+.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+button {
+  font: inherit;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); min-width: 108px; font-weight: 700; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.controls .hint { margin: 0; }
+.onplay { color: var(--muted); margin-left: 8px; }
+.keys { color: var(--muted); font-size: 12.5px; margin-left: auto; }
+kbd { font: inherit; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; background: var(--surface); }
+
+.grid { display: grid; grid-template-columns: 290px 1fr; gap: 16px; align-items: start; }
+@media (max-width: 760px) { .grid { grid-template-columns: 1fr; } .keys { display: none; } }
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label, .field .label { font-weight: 500; display: flex; justify-content: space-between; gap: 8px; }
+.field output { color: var(--accent); font-variant-numeric: tabular-nums; font-weight: 700; }
+.field input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0; }
+.hint { color: var(--muted); font-size: 12.5px; margin: 0; line-height: 1.6; }
+.seg { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg label { text-align: center; padding: 6px 4px; cursor: pointer; font-size: 14px; border-left: 1px solid var(--line); display: block; }
+.seg label:first-of-type { border-left: 0; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg input:checked + label { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.seg input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: -2px; }
+.check { display: flex; gap: 8px; align-items: center; }
+.check input { accent-color: var(--accent); }
+
+input[type="text"] {
+  width: 100%;
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+textarea {
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  font: inherit;
+  color: var(--ink);
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+#preview {
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  padding: 10px 12px;
+  line-height: 2.1;
+  position: relative;
+}
+#preview span {
+  cursor: pointer;
+  padding: 2px 1px;
+  border-right: 1px solid var(--line);
+  margin-right: 3px;
+  padding-right: 3px;
+}
+#preview span:hover { background: var(--mark); }
+#preview span.now { background: var(--accent); color: var(--accent-ink); border-radius: 3px; border-right-color: transparent; }
+#preview br + br { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>日本語RSVPリーダー</h1>
+    <p>視線を中央の印に置いたまま、区切りごとに流れる文を読みます。</p>
+  </header>
+
+  <div class="stage" id="stage" role="button" aria-label="クリックで再生／一時停止"><div id="chunk" aria-live="off"><span class="lead kana"></span><span class="core"></span><span class="trail kana"></span></div></div>
+
+  <div class="bar">
+    <input type="range" id="seek" min="0" max="0" value="0" aria-label="読む位置">
+    <div class="stats"><span id="pos"></span><span id="remain"></span></div>
+  </div>
+
+  <div class="controls">
+    <button class="primary" id="play" type="button">再生</button>
+    <button id="restart" type="button">最初から</button>
+    <span class="onplay">再生時に</span>
+    <span class="check"><input type="checkbox" id="immersive"><label for="immersive">UI消去</label></span>
+    <span class="check"><input type="checkbox" id="autofull"><label for="autofull">全画面化</label></span>
+    <span class="hint" id="fullNote" hidden></span>
+    <span class="keys"><kbd>Space</kbd> 再生／停止　<kbd>←</kbd><kbd>→</kbd> 前後　<kbd>↑</kbd><kbd>↓</kbd> 速度</span>
+  </div>
+
+  <div class="grid">
+    <section class="panel" aria-labelledby="h-set">
+      <h2 id="h-set">設定</h2>
+
+      <div class="field">
+        <span class="label">区切り方</span>
+        <div class="seg" role="radiogroup" aria-label="区切り方">
+          <input type="radio" name="mode" id="m-bunsetsu" value="bunsetsu" checked><label for="m-bunsetsu">文節</label>
+          <input type="radio" name="mode" id="m-pos" value="pos"><label for="m-pos">品詞</label>
+          <input type="radio" name="mode" id="m-word" value="word"><label for="m-word">単語</label>
+          <input type="radio" name="mode" id="m-fixed" value="fixed"><label for="m-fixed">字数</label>
+        </div>
+        <p class="hint" id="modeHint"></p>
+      </div>
+
+      <div class="field">
+        <label for="cpm">速度 <output id="cpmOut"></output></label>
+        <input type="range" id="cpm" min="300" max="2400" step="50" value="900">
+        <p class="hint">標準は毎分900字です。</p>
+      </div>
+
+      <div class="field">
+        <label for="maxLen"><span id="maxLenLabel">1区切りの上限</span> <output id="maxLenOut"></output></label>
+        <input type="range" id="maxLen" min="3" max="16" step="1" value="5">
+        <p class="hint" id="maxLenHint"></p>
+      </div>
+
+      <div class="field">
+        <label for="pause">句読点での間 <output id="pauseOut"></output></label>
+        <input type="range" id="pause" min="0" max="3" step="0.2" value="1.2">
+      </div>
+
+      <div class="field">
+        <label for="terms">ひとまとめにする語</label>
+        <input type="text" id="terms" placeholder="例: いるかホテル、羊男" autocomplete="off">
+        <div class="check"><input type="checkbox" id="auto"><label for="auto">繰り返し出る並びを自動でまとめる</label></div>
+        <p class="hint" id="detected"></p>
+      </div>
+
+      <div class="check"><input type="checkbox" id="merge"><label for="merge">文節をつなげて目安の長さに寄せる</label></div>
+      <div class="field">
+        <label for="fsKanji">漢字の大きさ <output id="fsKanjiOut"></output></label>
+        <input type="range" id="fsKanji" min="50" max="150" step="5" value="70">
+      </div>
+      <div class="field">
+        <label for="fsKana">かな・句読点の大きさ <output id="fsKanaOut"></output></label>
+        <input type="range" id="fsKana" min="50" max="150" step="5" value="65">
+      </div>
+      <div class="check"><input type="checkbox" id="gothic"><label for="gothic">ゴシック体で表示する</label></div>
+      <div class="row">
+        <button id="copySettings" type="button">設定をコピー</button>
+        <span class="hint" id="copyNote"></span>
+      </div>
+      <textarea id="settingsOut" readonly hidden aria-label="設定の文字列" style="min-height: 90px; font-size: 12px;"></textarea>
+    </section>
+
+    <section class="panel" aria-labelledby="h-text">
+      <div class="row">
+        <h2 id="h-text">本文</h2>
+        <button id="sample" type="button">サンプル文に戻す</button>
+      </div>
+      <textarea id="text" spellcheck="false" aria-label="読む本文"></textarea>
+      <div class="row">
+        <h2>区切りの確認</h2>
+        <span class="check"><input type="checkbox" id="follow"><label for="follow">読んでいる位置に合わせてスクロール</label></span>
+      </div>
+      <div id="preview"></div>
+      <p class="hint">クリックした位置から読めます。</p>
+    </section>
+  </div>
+</main>
+
+<script src="budoux-ja.js"></script>
+<script src="kuromoji.js"></script>
+<script id="seglib">
+/* ---- 区切りのロジック（DOMに依存しない） ---- */
+var RE_HIRA = /^[ぁ-ゖゝゞー]+$/;
+var RE_STOP = /^[、。，．！？!?…‥,.;；]+$/;          // ここで区切りを閉じる
+var RE_CLOSE = /^[」』）)\]】〉》”’:：・〜～ー―—\-]+$/;   // 前に付けるが閉じない
+var RE_OPEN = /^[「『（(\[【〈《“‘]+$/;                 // 次の区切りの頭に付ける
+var RE_KANJI_END = /[一-鿿々〆ヶァ-ヺ]$/;
+var RE_KANJI1 = /^[一-鿿]$/;
+var RE_DIGIT_END = /[0-9０-９]$/;
+var RE_HAS_HIRA = /[ぁ-ゖ]/;
+// ひらがなだけでも新しい文節を始める語（自立語）
+var INDEP = new Set(('この その あの どの これ それ あれ どれ ここ そこ あそこ どこ こう そう ああ どう ' +
+  'そして しかし また ただ もし なぜ だから つまり さらに そこで それで ところが けれども すると なお および または あるいは ' +
+  'とても かなり すぐ まだ もう ずっと きっと やはり やっぱり ほとんど たくさん すこし ちょっと もっと いつも よく たとえば もちろん むしろ ' +
+  'こと もの ため とき ところ ひと わたし あなた みんな だれ なに いつ いま ' +
+  'ある ない いい よい できる わかる なる').split(' '));
+
+function tokenize(text) {
+  if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+    var seg = new Intl.Segmenter('ja', { granularity: 'word' });
+    var out = [];
+    for (var s of seg.segment(text)) out.push(s.segment);
+    return out;
+  }
+  // Intl.Segmenter がない環境: 文字種の変わり目で分ける簡易版
+  return text.match(/[一-鿿々〆ヶ]+|[ぁ-ゖー]+|[ァ-ヺー]+|[A-Za-z0-9０-９]+|\s+|[\s\S]/g) || [];
+}
+
+function plainLen(s) { return s.replace(/[、。，．！？!?…‥,.;；「」『』（）()\[\]【】〈〉《》“”‘’:：・\s]/g, '').length; }
+
+// ---- 文節モード: BudouX の文節境界を土台に、つなぎ直しと長すぎる文節の分割をする ----
+var RENTAI = new Set('この その あの どの 同じ 大きな 小さな ある いわゆる あらゆる わが'.split(' '));
+var RE_PARTICLE_END = /[はがをにへとでもやの]$/;
+var RE_COMPOUND = /^(よって|より|よる|よれば|よると|ついて|つき|おいて|おける|とって|対して|対する|関して|関する|つれて|わたって|かけて|応じて|基づいて|比べて)/;
+var RE_AUX = /^(いる|いた|いて|います|いました|いく|いった|くる|きた|みる|みた|おく|おいた|しまう|しまった|ください|ほしい|もらう|もらった|くれる|くれた|あげる)/;
+var RE_END_PUNCT = /[、。，．！？!?…‥」』）)]$/;
+var RE_OPEN_TAIL = /[「『（(\[【〈《“‘]+$/;
+function plain(s) { return s.replace(/[、。，．！？!?…‥,.;；「」『』（）()\[\]【】〈〉《》“”‘’:：・\s]/g, ''); }
+
+var RE_STEM = /^[\u4e00-\u9fff々]+[\u3041-\u3096]{0,2}[いきぎしじちびみりえけげせぜねべめれ]$/;   // 泊まり、買い、読み、受け など
+var RE_FORMAL = /^(こと|もの|ため|よう|はず|わけ|ところ|とき|ほう|まま|つもり)/;           // 形式名詞
+var RE_LIGHT = /^(でき|なる|なっ|なり|する|した|して|しま|ある|あっ|あり|ない|なかっ|いる|いた|いま)/; // 軽い述語
+
+// 読むときの重さ（漢字1、かな0.8、英数0.5）。句読点・括弧は数えない
+function weight(s) {
+  var w = 0;
+  Array.from(plain(s)).forEach(function (c) {
+    if (/[\u4e00-\u9fff々〆ヶ]/.test(c)) w += 1;
+    else if (/[\u3041-\u30ff]/.test(c)) w += 0.8;
+    else if (/[\x20-\x7e]/.test(c)) w += 0.5;
+    else w += 1;
+  });
+  return w;
+}
+
+// 文節 a と b のあいだの切れ目の強さ。0=ほぼ切れない、1=ふつう、2=やや強い、Infinity=必ず切る
+function boundary(a, b) {
+  var pa = plain(a), pb = plain(b);
+  if (/[、。，．！？!?…‥,.;；:：]$/.test(a)) return Infinity;
+  if (/[A-Za-z0-9]$/.test(pa) && /^[A-Za-z0-9]/.test(pb)) return Infinity;   // 英単語どうしは詰めない
+  if (RE_OPEN.test(b.charAt(0))) return 2;                         // 開き括弧の前
+  if (/^[\u30a1-\u30faー・]+$/.test(pa) && /^[\u4e00-\u9fff\u30a1-\u30fa]/.test(pb)) return -1;   // カタカナ語＋漢字は複合語とみなす（モルダウ｜河の）
+  if (RE_STEM.test(pa) && /^[\u4e00-\u9fff]/.test(pb)) return -1;   // 連用形＋漢字は複合語とみなす（泊まり｜客の）
+  if (RENTAI.has(pa)) return 0;                                    // 連体詞＋名詞（この｜リーダーでは）
+  if (/[のな]$/.test(pa)) return 0;                                // 連体修飾（基本の｜単位に、経済的な｜問題）
+  if (/に$/.test(pa) && RE_COMPOUND.test(pb)) return 0;            // 複合助詞（人に｜よって）
+  if (/と$/.test(pa) && /^(いう|いった|いえば|いって)/.test(pb)) return 0;  // 〜と｜いう
+  if (/[てで]$/.test(pa) && RE_AUX.test(pb)) return 0;             // 補助動詞（読んで｜いる）
+  if (RE_FORMAL.test(pb)) return 0;                                // 形式名詞（感じる｜ことが）
+  if (RE_LIGHT.test(pb)) return 0;                                 // 軽い述語（ことが｜できる）
+  if (pa.length <= 2 && !RE_PARTICLE_END.test(pa)) return 0;       // 短い副詞など（まだ｜無い）
+  if (/[はも]$/.test(pa)) return 2;                                // 主題のあと
+  if (/(ので|から|けど|けれど|ても|たら|なら|れば|[てでば])$/.test(pa)) return 2;  // 節の切れ目
+  return 1;
+}
+
+function splitLong(phrase, maxLen, terms) {
+  var total = plain(phrase).length;
+  var target = total / Math.ceil(total / maxLen);                    // 均等に近い長さで割る
+  var pieces = [], cur = '';
+  // 割ってよい位置を語の切れ目から選ぶ。ただし複合語の内側（カタカナ語の途中、カタカナ語＋漢字1〜2字、ひとまとめ指定の語）は切らない
+  var toks = [];
+  protect(tokenize(phrase), terms || []).forEach(function (tok) {
+    var prev = toks.length ? toks[toks.length - 1] : '';
+    var kataPrev = /[\u30a1-\u30faー]$/.test(prev);
+    if ((kataPrev && /^([\u30a1-\u30faー]+|・)$/.test(tok)) || (/・$/.test(prev) && /^[\u30a1-\u30fa]/.test(tok))) toks[toks.length - 1] += tok;   // モル＋ダウ、ドルフィン・ホテル
+    else if (kataPrev && /^[\u4e00-\u9fff]{1,2}/.test(tok)) toks[toks.length - 1] += tok;          // モルダウ＋河
+    else toks.push(tok);
+  });
+  function flush() {
+    var m = cur.match(RE_OPEN_TAIL), carry = m ? m[0] : '';
+    var body = carry ? cur.slice(0, -carry.length) : cur;
+    if (body) pieces.push(body);
+    cur = carry;
+  }
+  toks.forEach(function (tok) {
+    if (/^\s+$/.test(tok)) return;
+    if (RE_STOP.test(tok) || RE_CLOSE.test(tok)) {
+      if (cur) cur += tok; else if (pieces.length) pieces[pieces.length - 1] += tok; else cur = tok;
+      return;
+    }
+    if (RE_OPEN.test(tok)) { if (plain(cur).length >= target) flush(); cur += tok; return; }
+    var arr = Array.from(tok), hard = Math.max(maxLen, 12);         // 1語は12字までは割らずに出す
+    while (arr.length > hard) { flush(); cur += arr.splice(0, hard).join(''); flush(); }
+    tok = arr.join('');
+    var n = plain(cur).length;
+    var attachable = RE_HIRA.test(tok) && tok.length <= 2;           // 助詞はなるべく前に残す
+    if (n && (n + tok.length > maxLen || (n >= target && !attachable))) flush();
+    cur += tok;
+  });
+  flush();
+  if (cur) { if (pieces.length) pieces[pieces.length - 1] += cur; else pieces.push(cur); }
+  for (var i = pieces.length - 1; i >= 0 && pieces.length > 1; i--) {   // 1字だけの切れ端を残さない
+    if (plain(pieces[i]).length > 1) continue;
+    if (i > 0) { pieces[i - 1] += pieces[i]; pieces.splice(i, 1); }
+    else { pieces[1] = pieces[0] + pieces[1]; pieces.splice(0, 1); }
+  }
+  return pieces;
+}
+
+// ひとまとめにする語の内側にある文節境界を消す
+function protect(phrases, terms) {
+  if (!terms.length || phrases.length < 2) return phrases;
+  var text = phrases.join(''), cuts = new Set(), pos = 0;
+  for (var i = 0; i < phrases.length - 1; i++) { pos += phrases[i].length; cuts.add(pos); }
+  terms.forEach(function (term) {
+    for (var s = text.indexOf(term); s >= 0; s = text.indexOf(term, s + 1)) {
+      for (var b = s + 1; b < s + term.length; b++) cuts.delete(b);
+    }
+  });
+  var out = [], prev = 0;
+  Array.from(cuts).sort(function (a, b) { return a - b; }).forEach(function (c) { out.push(text.slice(prev, c)); prev = c; });
+  out.push(text.slice(prev));
+  return out;
+}
+
+// 本文中でいつも同じ並びで出てくる「語＋次の語」を、固有名詞などの候補として拾う。
+// 文節の切れ方は前後の文脈で変わるので、文節境界をまたぐ並びを候補にして、回数は本文全体の文字列で数える
+function countOcc(text, s) {
+  var n = 0;
+  for (var i = text.indexOf(s); i >= 0; i = text.indexOf(s, i + s.length)) n++;
+  return n;
+}
+function detectTerms(text, parser) {
+  var RE_WORD = /^[\u3041-\u30ff\u4e00-\u9fff々]+$/;
+  var cands = {};
+  text.split(/\s+/).forEach(function (part) {
+    if (!part) return;
+    var ph = parser.parse(part);
+    for (var i = 0; i < ph.length - 1; i++) {
+      var left = ph[i];
+      if (/[はがをにでともへやの]$/.test(left)) continue;
+      var head = tokenize(ph[i + 1])[0] || '';
+      if (head.length < 2 || !RE_WORD.test(head) || (RE_HIRA.test(head) && head.length < 3)) continue;
+      var toks = tokenize(left), suf = '';
+      for (var k = toks.length - 1; k >= 0 && k >= toks.length - 3; k--) {   // 左側は語の切れ目に沿って1〜3語ぶん
+        if (!RE_WORD.test(toks[k])) break;
+        suf = toks[k] + suf;
+        if (suf.length > 8) break;
+        if (suf.length < 2) continue;
+        var key = suf + '\u0000' + head;
+        cands[key] = (cands[key] || 0) + 1;
+      }
+    }
+  });
+  var found = [];
+  Object.keys(cands).sort(function (a, b) { return a.length - b.length; }).forEach(function (key) {
+    var suf = key.split('\u0000')[0], term = key.replace('\u0000', '');
+    if (found.some(function (f) { return term.indexOf(f) >= 0; })) return;   // 短い形がすでに採用済み
+    var total = countOcc(text, term);
+    if (total >= 3 && total / countOcc(text, suf) >= 0.8) found.push(term);
+  });
+  return found;
+}
+
+function segmentBunsetsu(text, maxLen, opts) {
+  var chunks = [];
+  var terms = (opts.terms || []).filter(function (t) { return t.length > 1; });
+  opts.detected = opts.auto ? detectTerms(text, opts.parser) : [];
+  terms = terms.concat(opts.detected);
+  text.split(/\n+/).forEach(function (line) {
+    var phrases = [];
+    line.split(/\s+/).forEach(function (part) {
+      if (!part) return;
+      protect(opts.parser.parse(part), terms).forEach(function (ph) {
+        if (!ph) return;
+        var last = phrases.length ? phrases[phrases.length - 1] : '';
+        if ((RE_STOP.test(ph) || RE_CLOSE.test(ph)) && last) phrases[phrases.length - 1] += ph;
+        else if (last && RE_OPEN.test(last)) phrases[phrases.length - 1] += ph;
+        else phrases.push(ph);
+      });
+    });
+    var joined = phrases.map(function (ph) { return { t: ph, first: ph, last: ph }; });
+    if (opts.merge) {
+      // 切れ目の弱い境界から順につなげ、目安の重さに収まるかぎり続ける
+      for (;;) {
+        var best = -1, bestS = Infinity, bestW = Infinity;
+        for (var i = 0; i < joined.length - 1; i++) {
+          var s = boundary(joined[i].last, joined[i + 1].first);
+          if (s === Infinity) continue;
+          var w = weight(joined[i].t) + weight(joined[i + 1].t);
+          if (w > (s >= 2 ? maxLen * 0.75 : maxLen)) continue;
+          if (s < bestS || (s === bestS && w < bestW)) { best = i; bestS = s; bestW = w; }
+        }
+        if (best < 0) break;
+        joined[best].t += joined[best + 1].t;
+        joined[best].last = joined[best + 1].last;
+        joined.splice(best + 1, 1);
+      }
+      // ごく短い区切りが残ったら、目安を少し超えてでも隣に寄せる
+      for (var k = 0; k < joined.length; k++) {
+        if (joined.length < 2 || weight(joined[k].t) > 2.4) continue;
+        var sl = k > 0 ? boundary(joined[k - 1].last, joined[k].first) : Infinity;
+        var sr = k < joined.length - 1 ? boundary(joined[k].last, joined[k + 1].first) : Infinity;
+        var wl = k > 0 ? weight(joined[k - 1].t) : Infinity, wr = k < joined.length - 1 ? weight(joined[k + 1].t) : Infinity;
+        var lim = maxLen * 1.25 - weight(joined[k].t);
+        var okL = sl !== Infinity && wl <= lim, okR = sr !== Infinity && wr <= lim;
+        if (!okL && !okR) continue;
+        var left = okL && (!okR || sl < sr || (sl === sr && wl <= wr));
+        var at = left ? k - 1 : k;
+        joined[at].t += joined[at + 1].t; joined[at].last = joined[at + 1].last; joined.splice(at + 1, 1);
+        k = Math.max(-1, at - 1);
+      }
+    }
+    // 1字だけの区切り（「だ」「し、」など）は、目安を超えても前の区切りに付ける
+    for (var q = 0; q < joined.length; q++) {
+      if (joined.length < 2 || plain(joined[q].t).length > 1) continue;
+      var canL = q > 0 && !/[。．！？!?…]$/.test(joined[q - 1].t);
+      var canR = q < joined.length - 1 && !/[、。，．！？!?…‥,.;；:：]$/.test(joined[q].t);
+      if (!canL && !canR) continue;
+      var to = canL ? q - 1 : q;
+      joined[to].t += joined[to + 1].t; joined[to].last = joined[to + 1].last; joined.splice(to + 1, 1);
+      q = Math.max(-1, to - 1);
+    }
+    var start = chunks.length;
+    joined.forEach(function (j) {
+      if (weight(j.t) > maxLen * 1.25) splitLong(j.t, Math.ceil(maxLen * 1.25), terms).forEach(function (p) { chunks.push({ t: p, para: false }); });
+      else chunks.push({ t: j.t, para: false });
+    });
+    if (chunks.length > start) chunks[chunks.length - 1].para = true;
+  });
+  return chunks;
+}
+
+// ---- 品詞モード: 形態素解析（kuromoji）の結果から文節を組み立てる ----
+// 自立語で新しい文節を始め、助詞・助動詞・接尾辞・非自立語・記号は前に付ける
+function posPhrases(tokens) {
+  var out = [], cur = '', prev = null;
+  tokens.forEach(function (t) {
+    var pos = t.pos, d1 = t.pos_detail_1, s = t.surface_form;
+    var attach;
+    if (!cur) attach = false;
+    else if (pos === '記号') attach = d1 !== '括弧開';
+    else if (pos === '助詞' || pos === '助動詞') attach = true;
+    else if (d1 === '非自立' || d1 === '接尾') attach = true;
+    else if (prev && prev.pos === '接頭詞') attach = true;
+    else if (prev && prev.surface_form === '・' && pos === '名詞') attach = true;                // ドルフィン・ホテル
+    else if (prev && prev.pos === '名詞' && pos === '名詞'
+      && !/代名詞|副詞可能/.test(prev.pos_detail_1) && !/代名詞|副詞可能/.test(d1)) attach = true; // 複合名詞（泊まり客）
+    else if (prev && prev.pos_detail_1 === 'サ変接続' && t.basic_form === 'する') attach = true;   // 勉強する
+    else attach = false;
+    if (attach) cur += s;
+    else { if (cur) out.push(cur); cur = s; }
+    prev = t;
+  });
+  if (cur) out.push(cur);
+  return out;
+}
+
+function segment(text, mode, maxLen, opts) {
+  if ((mode === 'bunsetsu' || mode === 'pos') && opts && opts.parser) return segmentBunsetsu(text, maxLen, opts);
+  var chunks = [];           // {t: 文字列, para: 段落末か}
+  var cur = '', open = '';
+  function flush() { if (cur) { chunks.push({ t: cur, para: false }); cur = ''; } }
+  function start(tok) { cur = open + tok; open = ''; }
+
+  if (mode === 'fixed') {
+    var chars = Array.from(text);
+    for (var i = 0; i < chars.length; i++) {
+      var c = chars[i];
+      if (c === '\n') { flush(); if (chunks.length) chunks[chunks.length - 1].para = true; continue; }
+      if (/\s/.test(c)) continue;
+      cur += c;
+      var nx = chars[i + 1] || '';
+      if (plainLen(cur) >= maxLen && !RE_STOP.test(nx) && !RE_CLOSE.test(nx) && !RE_OPEN.test(c)) flush();
+    }
+    flush();
+    return chunks;
+  }
+
+  var toks = tokenize(text);
+  for (var k = 0; k < toks.length; k++) {
+    var tok = toks[k];
+    if (/\n/.test(tok)) { flush(); if (chunks.length) chunks[chunks.length - 1].para = true; continue; }
+    if (/^\s+$/.test(tok)) { flush(); continue; }
+    if (RE_OPEN.test(tok)) { flush(); open += tok; continue; }
+    if (RE_STOP.test(tok) || RE_CLOSE.test(tok)) {
+      if (cur) cur += tok;
+      else if (chunks.length && !chunks[chunks.length - 1].para && !open) chunks[chunks.length - 1].t += tok;
+      else start(tok);
+      if (RE_STOP.test(tok)) flush();
+      continue;
+    }
+    // 1語が上限より長いときは機械的に割る
+    if (tok.length > maxLen) {
+      flush();
+      var arr = Array.from(tok);
+      while (arr.length > maxLen) { start(arr.splice(0, maxLen).join('')); flush(); }
+      start(arr.join(''));
+      continue;
+    }
+    var attach = false;
+    if (cur && mode === 'bunsetsu') {
+      var body = cur.slice(open.length ? 0 : 0);
+      if (RE_HIRA.test(tok) && !INDEP.has(tok)) attach = true;                        // 助詞・助動詞・活用語尾
+      else if (RE_DIGIT_END.test(cur)) attach = true;                                  // 3+人、2026+年
+      else if (RE_KANJI1.test(tok) && RE_KANJI_END.test(cur) && !RE_HAS_HIRA.test(body)) attach = true; // 接尾の1字（的・性・化…）
+      else if (/^[おご]$/.test(cur.replace(/^[「『（(\[【〈《“‘]+/, ''))) attach = true;   // 接頭の お・ご
+      if (/[」』）)\]】〉》”’]$/.test(cur) && !RE_HIRA.test(tok)) attach = false;
+    }
+    if (attach && plainLen(cur) + tok.length > maxLen) attach = false;
+    if (attach) cur += tok; else { flush(); start(tok); }
+  }
+  if (open) { cur += open; open = ''; }
+  flush();
+  return chunks;
+}
+
+// 1区切りの表示時間（ミリ秒）
+function duration(chunk, cpm, pauseScale) {
+  var per = 60000 / cpm;
+  var ms = Math.max(250, plainLen(chunk.t) * per * 0.85);   // 下限250ms、字数比例ぶんは0.85倍
+  var extra = 0;
+  if (/[。．！？!?…]/.test(chunk.t.slice(-2))) extra = per * 2.5;
+  else if (/[、，,;；]$/.test(chunk.t)) extra = per * 1.25;
+  if (chunk.para) extra = per * 4;
+  return ms + extra * pauseScale;
+}
+if (typeof module !== 'undefined') module.exports = { segment: segment, duration: duration, posPhrases: posPhrases };
+</script>
+
+<script>
+(function () {
+  if (typeof document === 'undefined') return;
+  var SAMPLE = [
+    'RSVPは「高速逐次視覚提示」と訳される読み方で、文章を小さなまとまりに切り、画面の同じ場所へ次々に映していきます。目を左右へ動かす必要がないので、視線は中央の印に置いたままで構いません。',
+    '英語なら単語ごとに区切れば済みますが、日本語には分かち書きがありません。そこでこのリーダーでは、名詞や動詞に助詞や活用語尾がついた「文節」を基本の単位にしています。たとえば「私は昨日、友達と映画を見に行きました。」は、五つか六つほどのまとまりになるはずです。',
+    '区切りが短すぎると意味がつかみにくく、長すぎると一目で読めません。2026年の今でも、ちょうどよい長さは人によって違います。上限の字数や速度を変えながら、自分に合う設定を探してみてください。'
+  ].join('\n\n');
+  var HINTS = {
+    pos: '形態素解析（kuromoji）で品詞を判定して文節を作り、目安の長さまでつなげます。初回は辞書（約17MB）を読み込みます。',
+    bunsetsu: (window.BudouXJa ? '文節（BudouX）を、切れ目の弱いところから目安の長さまでつなげます。かなは漢字より軽く数えます。' : '分割モデルを読み込めなかったため、簡易ルールで文節を作っています。'),
+    word: '辞書ベースの単語分割そのままです。細かく刻まれるので、区切りの癖を確かめたいとき向きです。',
+    fixed: '意味を無視して一定の字数で切ります。文節区切りとの違いを比べる用です。'
+  };
+  var MAXLEN_HINTS = {
+    pos: '漢字を1、かなを0.8、英数字を0.5として足し、合計がこの値に収まるあいだ文節をつなげます。句読点と括弧は数えません。3字以下の短い区切りを隣に寄せるときだけ、1.25倍まで超えます。',
+    bunsetsu: '漢字を1、かなを0.8、英数字を0.5として足し、合計がこの値に収まるあいだ文節をつなげます。句読点と括弧は数えません。3字以下の短い区切りを隣に寄せるときだけ、1.25倍まで超えます。',
+    word: '1語がこの字数を超えたときだけ、途中で割ります。',
+    fixed: '句読点と括弧を除いて、この字数ごとに切ります。'
+  };
+  var $ = function (id) { return document.getElementById(id); };
+  var el = { chunk: $('chunk'), stage: $('stage'), seek: $('seek'), pos: $('pos'), remain: $('remain'), play: $('play'),
+    text: $('text'), preview: $('preview'), cpm: $('cpm'), cpmOut: $('cpmOut'), maxLen: $('maxLen'), maxLenOut: $('maxLenOut'),
+    maxLenLabel: $('maxLenLabel'), maxLenHint: $('maxLenHint'), pause: $('pause'), pauseOut: $('pauseOut'), gothic: $('gothic'), merge: $('merge'), autofull: $('autofull'), fullNote: $('fullNote'), immersive: $('immersive'), follow: $('follow'), fsKanji: $('fsKanji'), fsKanjiOut: $('fsKanjiOut'), fsKana: $('fsKana'), fsKanaOut: $('fsKanaOut'), terms: $('terms'), auto: $('auto'), detected: $('detected'), modeHint: $('modeHint') };
+
+  var st = { v3: true, mode: 'bunsetsu', cpm: 900, maxLen: 5, pause: 1.2, gothic: false, immersive: false, autofull: false, follow: true, fsKanji: 70, fsKana: 65, merge: true, terms: '', auto: true, text: SAMPLE };
+  try {
+    var saved = JSON.parse(localStorage.getItem('rsvp-ja-2') || 'null');
+    if (!saved) {   // 旧設定からは速度と間を引き継がない（目盛りが変わったため）
+      saved = JSON.parse(localStorage.getItem('rsvp-ja') || 'null');
+      if (saved) { delete saved.cpm; delete saved.pause; }
+    if (saved && !saved.v3) { delete saved.maxLen; }
+    }
+    if (saved && saved.smallkana) { saved.fsKana = 90; }
+    if (saved) { delete saved.smallkana; Object.assign(st, saved); }
+  } catch (e) {}
+  function save() { try { localStorage.setItem('rsvp-ja-2', JSON.stringify(st)); } catch (e) {} }
+
+  var chunks = [], idx = 0, playing = false, timer = null, spans = [];
+
+  // ---- 読んだ位置の記憶 ----
+  // 位置は「本文の何文字目か」で持つ。区切りの番号は設定で変わるため使わない
+  function hashText(s) {   // FNV-1a 32bit。本文が同じかどうかの照合だけに使う
+    var x = 0x811c9dc5;
+    for (var i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 0x01000193) >>> 0; }
+    return s.length + ':' + x.toString(16);
+  }
+  function assignStarts() {   // 各区切りが本文の何文字目から始まるかを求める（区切りは空白・改行を除いて本文と同じ順に並ぶ）
+    var text = st.text, p = 0;
+    chunks.forEach(function (c) {
+      while (p < text.length && /\s/.test(text[p])) p++;
+      c.start = p;
+      for (var k = 0; k < c.t.length && p < text.length; k++) {
+        while (p < text.length && /\s/.test(text[p]) && !/\s/.test(c.t[k])) p++;
+        p++;
+      }
+    });
+  }
+  function indexAt(off) {
+    var i = 0;
+    while (i < chunks.length - 1 && chunks[i + 1].start <= off) i++;
+    return i;
+  }
+  function sentenceStartOf(i) {   // その区切りを含む文の頭
+    while (i > 0 && !/[。．！？!?…]/.test(chunks[i - 1].t.slice(-2)) && !chunks[i - 1].para) i--;
+    return i;
+  }
+  var POS_KEY = 'rsvp-ja-pos';
+  function savePos() {
+    if (!chunks.length) return;
+    try { localStorage.setItem(POS_KEY, JSON.stringify({ hash: hashText(st.text), offset: chunks[idx].start })); } catch (e) {}
+  }
+  function clearPos() { try { localStorage.removeItem(POS_KEY); } catch (e) {} }
+  function restorePos() {   // 本文が保存時と同じときだけ、その文の頭から再開する。違えば冒頭から
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem(POS_KEY) || 'null'); } catch (e) {}
+    if (!saved || saved.hash !== hashText(st.text)) { clearPos(); return; }
+    idx = sentenceStartOf(indexAt(saved.offset));
+    show();
+  }
+
+  // ---- 品詞モード用の辞書は、品詞モードを選んだときに初めて読み込む ----
+  var kuro = { state: 'idle', tokenizer: null, loaded: 0, error: '' };
+  var KURO_FILES = 12;
+  function loadKuromoji() {
+    if (kuro.state !== 'idle') return;
+    if (!window.kuromoji) { kuro.state = 'error'; kuro.error = '解析器を読み込めませんでした。'; syncUI(); return; }
+    kuro.state = 'loading'; syncUI();
+    window.KuromojiProgress = function () { kuro.loaded++; syncUI(); };
+    window.kuromoji.builder({ dicPath: 'dict/' }).build(function (err, tokenizer) {
+      if (err) { kuro.state = 'error'; kuro.error = '辞書を読み込めませんでした（' + (err.message || err) + '）。'; syncUI(); return; }
+      kuro.state = 'ready'; kuro.tokenizer = tokenizer;
+      syncUI(); rebuild(true);
+    });
+  }
+  var posParser = { parse: function (s) { return posPhrases(kuro.tokenizer.tokenize(s)); } };
+  function phraseMode() { return st.mode === 'bunsetsu' || st.mode === 'pos'; }
+  function currentParser() {
+    if (st.mode === 'pos' && kuro.state === 'ready') return posParser;
+    return window.BudouXJa;   // 品詞モードでも辞書を読み込むまではこちらで代用する
+  }
+
+  function rebuild(keep) {
+    var keepOff = keep && chunks[idx] ? chunks[idx].start : 0;
+    if (st.mode === 'pos') loadKuromoji();
+    var mode = st.mode === 'pos' && !window.BudouXJa && kuro.state !== 'ready' ? 'bunsetsu' : st.mode;
+    var opts = { merge: st.merge, parser: currentParser(), auto: st.auto, terms: st.terms.split(/[\s、,，]+/).filter(Boolean) };
+    chunks = segment(st.text, mode, st.maxLen, opts);
+    assignStarts();
+    var det = opts.detected || [];
+    el.detected.textContent = !phraseMode() || !opts.parser ? '文節・品詞モードでのみ使えます。'
+      : !st.auto ? '' : det.length ? '自動で見つけた並び: ' + det.slice(0, 12).join('、') + (det.length > 12 ? ' ほか' + (det.length - 12) + '件' : '')
+      : '自動で見つけた並びはありません（同じ並びが3回以上で対象）。';
+    idx = keep ? indexAt(keepOff) : 0;
+    el.seek.max = Math.max(0, chunks.length - 1);
+    el.preview.textContent = '';
+    spans = chunks.map(function (c, i) {
+      var s = document.createElement('span');
+      s.textContent = c.t;
+      s.dataset.i = i;
+      el.preview.appendChild(s);
+      if (c.para) { el.preview.appendChild(document.createElement('br')); }
+      return s;
+    });
+    show();
+  }
+
+  function show() {
+    var c = chunks[idx];
+    var t = c ? c.t : '本文を入れてください';
+    var lead = (t.match(/^[「『（(\[【〈《“‘、。，．！？!?…‥,.;；:：・\s]+/) || [''])[0];
+    var rest = t.slice(lead.length);
+    var trail = (rest.match(/[」』）)\]】〉》”’、。，．！？!?…‥,.;；:：・\s]+$/) || [''])[0];
+    var core = trail ? rest.slice(0, -trail.length) : rest;
+    if (!core) { core = t; lead = trail = ''; }
+    el.chunk.children[0].textContent = lead;
+    el.chunk.children[2].textContent = trail;
+    var coreEl = el.chunk.children[1];
+    coreEl.textContent = '';
+    core.split(/([\u3041-\u30ff、。，．！？!?…‥「」『』（）()\[\]【】〈〉《》“”‘’:：・,.;；]+)/).forEach(function (part, n) {   // かな・句読点の連続だけ別の span にする
+      if (!part) return;
+      if (n % 2) { var s = document.createElement('span'); s.className = 'kana'; s.textContent = part; coreEl.appendChild(s); }
+      else coreEl.appendChild(document.createTextNode(part));
+    });
+    el.seek.value = idx;
+    spans.forEach(function (s, i) { s.classList.toggle('now', i === idx); });
+    var cur = spans[idx];
+    if (cur && st.follow) {
+      // #preview は position: relative なので、offsetTop は枠の内側からの距離になる
+      var p = el.preview, top = cur.offsetTop, line = cur.offsetHeight;
+      if (top < p.scrollTop + line || top > p.scrollTop + p.clientHeight - line * 2) p.scrollTop = Math.max(0, top - p.clientHeight / 3);
+    }
+    var rest = 0;
+    for (var i = idx; i < chunks.length; i++) rest += duration(chunks[i], st.cpm, st.pause);
+    var sec = Math.round(rest / 1000);
+    el.pos.textContent = chunks.length ? (idx + 1) + ' / ' + chunks.length + ' 区切り' : '';
+    el.remain.textContent = chunks.length ? '残り 約' + (sec >= 60 ? Math.floor(sec / 60) + '分' : '') + (sec % 60) + '秒' : '';
+  }
+
+  function tick() {
+    if (!playing) return;
+    timer = setTimeout(function () {
+      if (idx >= chunks.length - 1) { setPlaying(false); clearPos(); return; }   // 読み終えたら記憶を消す
+      idx++; show(); tick();
+    }, duration(chunks[idx], st.cpm, st.pause));
+  }
+  // 再生中は操作部品を隠す。キー入力か、あそびを超えるカーソルの動きで、再生を止めて操作部品を戻す
+  var anchor = null, PLAY_SLACK = 40;   // カーソルのあそび（px）
+  function setImmersive(on) {
+    document.body.classList.toggle('immersive', on);
+    anchor = null;
+  }
+  document.addEventListener('mousemove', function (e) {
+    if (!playing || !document.body.classList.contains('immersive')) return;
+    if (!anchor) { anchor = { x: e.clientX, y: e.clientY }; return; }
+    if (Math.hypot(e.clientX - anchor.x, e.clientY - anchor.y) > PLAY_SLACK) setPlaying(false);
+  });
+
+  function setPlaying(on) {
+    clearTimeout(timer);
+    playing = on && chunks.length > 0;
+    setImmersive(playing && st.immersive);
+    el.play.textContent = playing ? '一時停止' : '再生';
+    if (playing) enterFull(); else savePos();
+    if (playing) { if (idx >= chunks.length - 1) idx = 0; show(); tick(); }
+  }
+  function go(i) {
+    idx = Math.max(0, Math.min(chunks.length - 1, i));
+    show();
+    if (playing) { clearTimeout(timer); tick(); } else savePos();
+  }
+  function syncUI() {
+    el.cpm.value = st.cpm; el.cpmOut.textContent = '毎分' + st.cpm + '字';
+    el.maxLen.value = st.maxLen; el.maxLenOut.textContent = phraseMode() ? st.maxLen : st.maxLen + '字';
+    el.maxLenLabel.textContent = st.mode === 'fixed' ? '1区切りの字数' : phraseMode() ? '1区切りの目安' : '1区切りの上限';
+    el.maxLenHint.textContent = MAXLEN_HINTS[st.mode];
+    el.pause.value = st.pause; el.pauseOut.textContent = st.pause === 0 ? 'なし' : '×' + st.pause.toFixed(1);
+    el.gothic.checked = st.gothic; el.immersive.checked = st.immersive; el.autofull.checked = st.autofull; el.follow.checked = st.follow; el.merge.checked = st.merge; el.merge.disabled = !phraseMode(); el.auto.checked = st.auto; el.auto.disabled = el.terms.disabled = !phraseMode(); if (el.terms.value !== st.terms) el.terms.value = st.terms; el.stage.classList.toggle('gothic', st.gothic); el.fsKanji.value = st.fsKanji; el.fsKanjiOut.textContent = st.fsKanji + '%';
+    el.fsKana.value = st.fsKana; el.fsKanaOut.textContent = st.fsKana + '%';
+    el.stage.style.setProperty('--fs-kanji', st.fsKanji / 100); el.stage.style.setProperty('--fs-kana', st.fsKana / 100);
+    el.modeHint.textContent = st.mode !== 'pos' ? HINTS[st.mode]
+      : kuro.state === 'loading' ? '辞書を読み込み中です（' + kuro.loaded + ' / ' + KURO_FILES + '）。読み込むまでは文節モードの区切りで表示します。'
+      : kuro.state === 'error' ? kuro.error + ' 文節モードの区切りで表示しています。'
+      : HINTS.pos;
+    var r = document.querySelector('input[name="mode"][value="' + st.mode + '"]'); if (r) r.checked = true;
+  }
+
+  el.play.addEventListener('click', function () { setPlaying(!playing); });
+  el.stage.addEventListener('click', function () { setPlaying(!playing); });
+  $('restart').addEventListener('click', function () { go(0); });
+  // 再生時に全画面化: 再生はクリックかキー操作から始まるので、その場で全画面を要求できる。停止しても解除はしない
+  function enterFull() {
+    if (!st.autofull || document.fullscreenElement) return;
+    try {
+      var p = document.documentElement.requestFullscreen();
+      if (p && p.catch) p.catch(fullFailed);
+    } catch (e) { fullFailed(); }
+  }
+  function fullFailed() {
+    el.fullNote.hidden = false;
+    el.fullNote.textContent = 'この環境では全画面にできません';
+  }
+  el.seek.addEventListener('input', function () { go(+el.seek.value); });
+  el.preview.addEventListener('click', function (e) { if (e.target.dataset && e.target.dataset.i) go(+e.target.dataset.i); });
+  el.cpm.addEventListener('input', function () { st.cpm = +el.cpm.value; syncUI(); show(); save(); });
+  el.pause.addEventListener('input', function () { st.pause = +el.pause.value; syncUI(); show(); save(); });
+  el.maxLen.addEventListener('input', function () { st.maxLen = +el.maxLen.value; syncUI(); rebuild(true); save(); });
+  el.merge.addEventListener('change', function () { st.merge = el.merge.checked; rebuild(true); save(); });
+  el.auto.addEventListener('change', function () { st.auto = el.auto.checked; rebuild(true); save(); });
+  el.terms.addEventListener('input', function () { st.terms = el.terms.value; rebuild(true); save(); });
+  el.fsKanji.addEventListener('input', function () { st.fsKanji = +el.fsKanji.value; syncUI(); save(); });
+  el.fsKana.addEventListener('input', function () { st.fsKana = +el.fsKana.value; syncUI(); save(); });
+  el.follow.addEventListener('change', function () { st.follow = el.follow.checked; show(); save(); });
+  el.immersive.addEventListener('change', function () { st.immersive = el.immersive.checked; setImmersive(playing && st.immersive); save(); });
+  el.autofull.addEventListener('change', function () { st.autofull = el.autofull.checked; el.fullNote.hidden = true; save(); });
+  $('copySettings').addEventListener('click', function () {   // 本文を除いた設定を文字列にしてコピーする
+    var out = {};
+    Object.keys(st).forEach(function (k) { if (k !== 'text' && k !== 'v3') out[k] = st[k]; });
+    var s = JSON.stringify(out);
+    var box = $('settingsOut'), note = $('copyNote');
+    box.value = s; box.hidden = false; box.select();
+    try {
+      navigator.clipboard.writeText(s).then(function () { note.textContent = 'コピーしました'; }, function () { note.textContent = '下の文字列を手でコピーしてください'; });
+    } catch (e) { note.textContent = '下の文字列を手でコピーしてください'; }
+  });
+  el.gothic.addEventListener('change', function () { st.gothic = el.gothic.checked; syncUI(); save(); });
+  document.querySelectorAll('input[name="mode"]').forEach(function (r) {
+    r.addEventListener('change', function () { st.mode = r.value; syncUI(); rebuild(true); save(); });
+  });
+  el.text.addEventListener('input', function () { st.text = el.text.value; setPlaying(false); rebuild(false); save(); savePos(); });
+  $('sample').addEventListener('click', function () { st.text = SAMPLE; el.text.value = SAMPLE; setPlaying(false); rebuild(false); save(); savePos(); });
+
+  document.addEventListener('keydown', function (e) {
+    if (playing && document.body.classList.contains('immersive')) { e.preventDefault(); setPlaying(false); return; }   // 没入モードの再生中はどのキーでも止めて戻す
+    var tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'textarea' || (tag === 'input' && e.target.type !== 'range' && e.target.type !== 'radio' && e.target.type !== 'checkbox')) return;
+    if (e.key === ' ') { if (tag === 'button') return; e.preventDefault(); setPlaying(!playing); }
+    else if (tag === 'input') return;
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); go(idx - 1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); go(idx + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); st.cpm = Math.min(2400, st.cpm + 50); syncUI(); show(); save(); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); st.cpm = Math.max(300, st.cpm - 50); syncUI(); show(); save(); }
+  });
+
+  // 再生したままタブを閉じたり切り替えたりしたときも保存する
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') savePos(); });
+  window.addEventListener('pagehide', savePos);
+
+  el.text.value = st.text;
+  syncUI();
+  rebuild(false);
+  restorePos();
+})();
+</script>
+</body>
+</html>

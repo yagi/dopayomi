@@ -1,0 +1,15 @@
+{
+  "name": "dopayomi",
+  "private": true,
+  "description": "ドパ読み — 日本語向けのRSVP（視線固定）リーダー",
+  "license": "MIT",
+  "scripts": {
+    "build": "node build/build.mjs"
+  },
+  "devDependencies": {
+    "budoux": "0.10.3",
+    "esbuild": "0.28.2",
+    "kuromoji": "0.1.2",
+    "path-browserify": "1.0.1"
+  }
+}
