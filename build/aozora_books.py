@@ -13,7 +13,8 @@ BOOKS = [  # (id, 作家番号, ファイル名)
     ('gingatetsudo', '000081', '456_ruby_145'),
     ('gongitsune', '000121', '628_ruby_649'),
     ('remon', '000074', '424_ruby_19825'),
-    ('kagakushatoatama', '000042', '2359_ruby_4688'),
+    ('sushi', '000076', '1016_ruby_19595'),
+    ('fukin', '000291', '1814_ruby_24165'),
 ]
 
 def jis0213(plane, row, cell):
