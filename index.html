@@ -580,6 +580,15 @@ textarea[readonly] { color: var(--muted); }
   </div>
 </main>
 
+<script>
+  // アクセス数の計測（GoatCounter）。GitHub Pages で開いたときだけ読み込む。送るのはページのURLと参照元だけで、本や本文は送らない
+  if (/\.github\.io$/.test(location.hostname)) {
+    var gc = document.createElement('script');
+    gc.async = true; gc.src = 'https://gc.zgo.at/count.js';
+    gc.dataset.goatcounter = 'https://yagi.goatcounter.com/count';
+    document.head.appendChild(gc);
+  }
+</script>
 <script src="budoux-ja.js"></script>
 <script src="kuromoji.js"></script>
 <script id="seglib">
