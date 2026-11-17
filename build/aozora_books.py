@@ -47,12 +47,36 @@ def clean(raw):
     if m: colophon, body = body[m.start():].strip(), body[:m.start()]
     body = re.sub(r'※［＃([^］]*)］', gaiji, body)
     body = re.sub(r'［＃[^］]*］', '', body)              # そのほかの注記（字下げ、傍点など）
-    body = re.sub(r'｜([^《｜\n]*)《[^》]*》', r'\1', body)  # ｜親文字《ルビ》
-    body = re.sub(r'《[^》]*》', '', body)                # 親文字《ルビ》
-    body = body.replace('｜', '')
     body = re.sub(r'[ \t　]+\n', '\n', body)
     body = re.sub(r'\n{3,}', '\n\n', body).strip('\n')
-    return title, author, body, colophon
+    body, ruby = extract_ruby(body)
+    return title, author, body, colophon, ruby
+
+# ルビを取り除き、[開始, 終了, 読み] の一覧にする。位置はブラウザの文字列と同じ UTF-16 の単位で数える
+RE_RUBY = re.compile(r'｜([^《｜\n]*)《([^》\n]*)》|《([^》\n]*)》')
+def char_class(c):
+    o = ord(c)
+    if 0x4E00 <= o <= 0x9FFF or 0x3400 <= o <= 0x4DBF or o >= 0x20000 or c in '々〆〇ヶ仝〻': return 'kanji'
+    if 0x30A1 <= o <= 0x30FA or c == 'ー': return 'kata'
+    if 0x3041 <= o <= 0x3096: return 'hira'
+    if c.isalnum(): return 'latin'
+    return None
+def u16(s): return len(s.encode('utf-16-le')) // 2
+def extract_ruby(text):
+    out, ruby, last, floor = [], [], 0, 0   # floor: 直前のルビの終わり。親文字はそれより前に伸ばさない
+    for m in RE_RUBY.finditer(text):
+        out.append(text[last:m.start()]); last = m.end()
+        if m.group(1) is not None:          # ｜親文字《読み》
+            pre = u16(''.join(out)); out.append(m.group(1)); floor = len(''.join(out))
+            if m.group(1): ruby.append([pre, pre + u16(m.group(1)), m.group(2)])
+        else:                               # 親文字《読み》: 直前の同じ字種の連なりが親文字
+            done = ''.join(out); out = [done]
+            k = len(done); cls = char_class(done[-1]) if done else None
+            while k > floor and cls and char_class(done[k - 1]) == cls: k -= 1
+            if k < len(done): ruby.append([u16(done[:k]), u16(done), m.group(3)])
+            floor = len(done)
+    out.append(text[last:])
+    return ''.join(out).replace('｜', ''), ruby
 
 src = sys.argv[1]
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
@@ -61,10 +85,11 @@ os.makedirs(out, exist_ok=True)
 index = []
 for bid, card, fname in BOOKS:
     raw = open(os.path.join(src, 'cards', card, 'files', fname, fname + '.txt'), 'rb').read().decode('shift_jis_2004')
-    title, author, body, colophon = clean(raw)
+    title, author, body, colophon, ruby = clean(raw)
     open(os.path.join(out, bid + '.txt'), 'w', encoding='utf-8').write(body + '\n')
+    json.dump(ruby, open(os.path.join(out, bid + '.ruby.json'), 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
     index.append({'id': bid, 'title': title, 'author': author, 'chars': len(re.sub(r'\s', '', body)),
                   'card': 'https://www.aozora.gr.jp/cards/%s/card%s.html' % (card, fname.split('_')[0]),
                   'colophon': colophon})
 json.dump(index, open(os.path.join(out, 'index.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
-for b in index: print(b['id'], b['title'], b['author'], b['chars'])
+for b in index: print(b['id'], b['title'], b['author'], b['chars'], len(json.load(open(os.path.join(out, b['id'] + '.ruby.json')))), 'ruby')

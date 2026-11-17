@@ -132,6 +132,14 @@ body.immersive .stage {
 #chunk .trail { text-align: left; }
 #chunk .kana { font-size: calc(1em * var(--fs-kana, 1) / var(--fs-kanji, 1)); }
 .stage.gothic #chunk { font-family: var(--font-gothic); }
+/* ルビ: 親文字の幅を変えないよう、読みは親文字の上に浮かせる（中心の計算にも影響しない） */
+#chunk .rb { position: relative; }
+#chunk .rt {
+  position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%);
+  font-size: .42em; line-height: 1; white-space: nowrap; letter-spacing: .04em;
+  font-weight: 400; opacity: .78; padding-bottom: .15em;
+}
+.stage.noruby #chunk .rt { display: none; }
 
 /* 目盛り: 罫線1本の上に小さな四角のつまみ */
 input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent; width: 100%; margin: 0; height: 18px; cursor: pointer; }
@@ -545,6 +553,7 @@ textarea[readonly] { color: var(--muted); }
         <label for="fsKana">かな・句読点の大きさ <output id="fsKanaOut"></output></label>
         <input type="range" id="fsKana" min="50" max="150" step="5" value="65">
       </div>
+      <div class="check"><input type="checkbox" id="ruby"><label for="ruby">ルビを表示する</label></div>
       <div class="check"><input type="checkbox" id="gothic"><label for="gothic">ゴシック体で表示する</label></div>
       <div class="row">
         <button id="copySettings" type="button">設定をコピー</button>
@@ -969,15 +978,38 @@ function aozoraClean(raw) {
     return '〓';
   });
   body = body.replace(/［＃[^］]*］/g, '')
-    .replace(/｜([^《｜\n]*)《[^》]*》/g, '$1')
-    .replace(/《[^》]*》/g, '')
-    .replace(/｜/g, '')
     .replace(/[ \t　]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .replace(/^\n+|\n+$/g, '');
-  return { title: title, author: author, text: body, colophon: colophon };
+  var r = extractRuby(body);
+  return { title: title, author: author, text: r.text, colophon: colophon, ruby: r.ruby };
 }
-if (typeof module !== 'undefined') module.exports = { segment: segment, duration: duration, posPhrases: posPhrases, aozoraClean: aozoraClean, isAozora: isAozora };
+// ルビを取り除き、[開始, 終了, 読み] の一覧にする（build/aozora_books.py と同じ規則）
+function rubyClass(c) {
+  if (/[\u4e00-\u9fff\u3400-\u4dbf々〆〇ヶ仝〻〓\ud800-\udfff]/.test(c)) return 'kanji';   // 〓（引けなかった外字）と拡張漢字（サロゲート）も漢字扱い
+  if (/[\u30a1-\u30faー]/.test(c)) return 'kata';
+  if (/[\u3041-\u3096]/.test(c)) return 'hira';
+  if (/[A-Za-z0-9Ａ-Ｚａ-ｚ０-９À-ɏ]/.test(c)) return 'latin';
+  return null;
+}
+function extractRuby(text) {
+  var re = /｜([^《｜\n]*)《([^》\n]*)》|《([^》\n]*)》/g, out = '', ruby = [], last = 0, floor = 0, m;
+  while ((m = re.exec(text))) {
+    out += text.slice(last, m.index); last = re.lastIndex;
+    if (m[1] !== undefined) {   // ｜親文字《読み》
+      var pre = out.length; out += m[1]; floor = out.length;
+      if (m[1]) ruby.push([pre, out.length, m[2]]);
+    } else {                    // 親文字《読み》: 直前の同じ字種の連なりが親文字
+      var k = out.length, cls = k ? rubyClass(out[k - 1]) : null;
+      while (k > floor && cls && rubyClass(out[k - 1]) === cls) k--;
+      if (k < out.length) ruby.push([k, out.length, m[3]]);
+      floor = out.length;
+    }
+  }
+  out += text.slice(last);
+  return { text: out.replace(/｜/g, ''), ruby: ruby };
+}
+if (typeof module !== 'undefined') module.exports = { segment: segment, duration: duration, posPhrases: posPhrases, aozoraClean: aozoraClean, isAozora: isAozora, extractRuby: extractRuby };
 </script>
 
 <script>
@@ -1004,9 +1036,9 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
   function kanjiNum(n) { return String(n).replace(/\d/g, function (d) { return '〇一二三四五六七八九'[d]; }); }   // 1178 → 一一七八
   var el = { chunk: $('chunk'), stage: $('stage'), seek: $('seek'), pos: $('pos'), remain: $('remain'), play: $('play'),
     text: $('text'), preview: $('preview'), cpm: $('cpm'), cpmOut: $('cpmOut'), maxLen: $('maxLen'), maxLenOut: $('maxLenOut'),
-    maxLenLabel: $('maxLenLabel'), maxLenHint: $('maxLenHint'), pause: $('pause'), pauseOut: $('pauseOut'), gothic: $('gothic'), merge: $('merge'), autofull: $('autofull'), fullNote: $('fullNote'), immersive: $('immersive'), follow: $('follow'), fsKanji: $('fsKanji'), fsKanjiOut: $('fsKanjiOut'), fsKana: $('fsKana'), fsKanaOut: $('fsKanaOut'), terms: $('terms'), auto: $('auto'), detected: $('detected'), modeHint: $('modeHint') };
+    maxLenLabel: $('maxLenLabel'), maxLenHint: $('maxLenHint'), pause: $('pause'), pauseOut: $('pauseOut'), gothic: $('gothic'), merge: $('merge'), ruby: $('ruby'), autofull: $('autofull'), fullNote: $('fullNote'), immersive: $('immersive'), follow: $('follow'), fsKanji: $('fsKanji'), fsKanjiOut: $('fsKanjiOut'), fsKana: $('fsKana'), fsKanaOut: $('fsKanaOut'), terms: $('terms'), auto: $('auto'), detected: $('detected'), modeHint: $('modeHint') };
 
-  var st = { v3: true, v4: true, mode: 'bunsetsu', cpm: 900, maxLen: 5, pause: 1.2, gothic: false, immersive: true, autofull: false, skin: 'paper', follow: true, fsKanji: 70, fsKana: 65, merge: true, terms: '', auto: true, book: 'sample' };
+  var st = { v3: true, v4: true, mode: 'bunsetsu', cpm: 900, maxLen: 5, pause: 1.2, gothic: false, immersive: true, autofull: false, skin: 'paper', ruby: true, follow: true, fsKanji: 70, fsKana: 65, merge: true, terms: '', auto: true, book: 'sample' };
   var legacyText = null;   // 書棚ができる前に保存していた本文（あれば「前回の本文」として書棚に移す）
   try {
     var saved = JSON.parse(localStorage.getItem('rsvp-ja-2') || 'null');
@@ -1023,7 +1055,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
   function save() { try { localStorage.setItem('rsvp-ja-2', JSON.stringify(st)); } catch (e) {} }
 
   var chunks = [], idx = 0, playing = false, timer = null, spans = [];
-  var cur = { id: 'sample', title: 'Dopayomiの使い方', author: 'Claude', kind: 'sample', text: SAMPLE };   // 読んでいる本
+  var cur = { id: 'sample', title: 'Dopayomiの使い方', author: 'Claude', kind: 'sample', text: SAMPLE, ruby: [] };   // 読んでいる本
 
   // ---- 読んだ位置の記憶 ----
   // 位置は「本文の何文字目か」で持つ。区切りの番号は設定で変わるため使わない
@@ -1099,11 +1131,22 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     return window.BudouXJa;   // 品詞モードでも辞書を読み込むまではこちらで代用する
   }
 
+  function rubyBases() {
+    var seen = {}, out = [];
+    (cur.ruby || []).forEach(function (r) {
+      var t = cur.text.slice(r[0], r[1]);
+      if (t.length >= 2 && !seen[t]) { seen[t] = 1; out.push(t); }
+    });
+    return out;
+  }
+
   function rebuild(keep) {
     var keepOff = keep && chunks[idx] ? chunks[idx].start : 0;
     if (st.mode === 'pos') loadKuromoji();
     var mode = st.mode === 'pos' && !window.BudouXJa && kuro.state !== 'ready' ? 'bunsetsu' : st.mode;
-    var opts = { merge: st.merge, parser: currentParser(), auto: st.auto, terms: st.terms.split(/[\s、,，]+/).filter(Boolean) };
+    var terms = st.terms.split(/[\s、,，]+/).filter(Boolean);
+    rubyBases().forEach(function (t) { terms.push(t); });   // ルビの付いた語は区切りの途中で割らない
+    var opts = { merge: st.merge, parser: currentParser(), auto: st.auto, terms: terms };
     chunks = segment(cur.text, mode, st.maxLen, opts);
     assignStarts();
     var det = opts.detected || [];
@@ -1124,6 +1167,28 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     show();
   }
 
+  // 区切り c の本体（先頭 from 文字目から len 文字）に収まるルビを、本体の中の位置で返す
+  function rubiesIn(c, from, len) {
+    var R = cur.ruby;
+    if (!R || !R.length || c.start == null) return [];
+    var text = cur.text, off = [], p = c.start;
+    for (var k = 0; k < c.t.length; k++) {   // 区切りの各文字が本文の何文字目か（空白は区切りに含まれない）
+      while (p < text.length && /\s/.test(text[p]) && !/\s/.test(c.t[k])) p++;
+      off.push(p); p++;
+    }
+    if (from + len > off.length || !len) return [];
+    var lo = off[from], hi = off[from + len - 1] + 1, out = [];
+    var a = 0, b = R.length;
+    while (a < b) { var m = (a + b) >> 1; if (R[m][0] < lo) a = m + 1; else b = m; }   // 開始位置で二分探索
+    for (var i = a; i < R.length && R[i][0] < hi; i++) {
+      if (R[i][1] > hi) continue;   // 区切りからはみ出すルビは付けない
+      var s = off.indexOf(R[i][0], from), e = off.indexOf(R[i][1] - 1, from);
+      if (s < 0 || e < 0) continue;
+      out.push([s - from, e - from + 1, R[i][2]]);
+    }
+    return out;
+  }
+
   function show() {
     var c = chunks[idx];
     var t = c ? c.t : (cur.loading ? '読み込み中…' : '本文がありません');
@@ -1136,11 +1201,24 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     el.chunk.children[2].textContent = trail;
     var coreEl = el.chunk.children[1];
     coreEl.textContent = '';
-    core.split(/([\u3041-\u30ff、。，．！？!?…‥「」『』（）()\[\]【】〈〉《》“”‘’:：・,.;；]+)/).forEach(function (part, n) {   // かな・句読点の連続だけ別の span にする
-      if (!part) return;
-      if (n % 2) { var s = document.createElement('span'); s.className = 'kana'; s.textContent = part; coreEl.appendChild(s); }
-      else coreEl.appendChild(document.createTextNode(part));
+    function putText(parent, s) {   // かな・句読点の連続だけ別の span にする（大きさを別に指定するため）
+      s.split(/([\u3041-\u30ff、。，．！？!?…‥「」『』（）()\[\]【】〈〉《》“”‘’:：・,.;；]+)/).forEach(function (part, n) {
+        if (!part) return;
+        if (n % 2) { var sp = document.createElement('span'); sp.className = 'kana'; sp.textContent = part; parent.appendChild(sp); }
+        else parent.appendChild(document.createTextNode(part));
+      });
+    }
+    var rubies = c && core === rest.slice(0, core.length) ? rubiesIn(c, lead.length, core.length) : [];
+    var pos = 0;
+    rubies.forEach(function (r) {   // r: [本体の中での開始, 終了, 読み]
+      putText(coreEl, core.slice(pos, r[0]));
+      var rb = document.createElement('span'); rb.className = 'rb';
+      putText(rb, core.slice(r[0], r[1]));
+      var rt = document.createElement('span'); rt.className = 'rt'; rt.textContent = r[2];
+      rb.appendChild(rt); coreEl.appendChild(rb);
+      pos = r[1];
     });
+    putText(coreEl, core.slice(pos));
     el.seek.value = idx;
     spans.forEach(function (s, i) { s.classList.toggle('now', i === idx); });
     var curSpan = spans[idx];
@@ -1194,7 +1272,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     el.maxLenLabel.textContent = st.mode === 'fixed' ? '1区切りの字数' : phraseMode() ? '1区切りの目安' : '1区切りの上限';
     el.maxLenHint.textContent = MAXLEN_HINTS[st.mode];
     el.pause.value = st.pause; el.pauseOut.textContent = st.pause === 0 ? 'なし' : '×' + st.pause.toFixed(1);
-    el.gothic.checked = st.gothic; el.immersive.checked = st.immersive; el.autofull.checked = st.autofull; el.follow.checked = st.follow; el.merge.checked = st.merge; el.merge.disabled = !phraseMode(); el.auto.checked = st.auto; el.auto.disabled = el.terms.disabled = !phraseMode(); if (el.terms.value !== st.terms) el.terms.value = st.terms; el.stage.classList.toggle('gothic', st.gothic); el.fsKanji.value = st.fsKanji; el.fsKanjiOut.textContent = st.fsKanji + '%';
+    el.gothic.checked = st.gothic; el.ruby.checked = st.ruby; el.stage.classList.toggle('noruby', !st.ruby); el.immersive.checked = st.immersive; el.autofull.checked = st.autofull; el.follow.checked = st.follow; el.merge.checked = st.merge; el.merge.disabled = !phraseMode(); el.auto.checked = st.auto; el.auto.disabled = el.terms.disabled = !phraseMode(); if (el.terms.value !== st.terms) el.terms.value = st.terms; el.stage.classList.toggle('gothic', st.gothic); el.fsKanji.value = st.fsKanji; el.fsKanjiOut.textContent = st.fsKanji + '%';
     el.fsKana.value = st.fsKana; el.fsKanaOut.textContent = st.fsKana + '%';
     el.stage.style.setProperty('--fs-kanji', st.fsKanji / 100); el.stage.style.setProperty('--fs-kana', st.fsKana / 100);
     el.modeHint.textContent = st.mode !== 'pos' ? HINTS[st.mode]
@@ -1246,6 +1324,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
       navigator.clipboard.writeText(s).then(function () { note.textContent = 'コピーしました'; }, function () { note.textContent = '下の文字列を手でコピーしてください'; });
     } catch (e) { note.textContent = '下の文字列を手でコピーしてください'; }
   });
+  el.ruby.addEventListener('change', function () { st.ruby = el.ruby.checked; syncUI(); save(); });
   el.gothic.addEventListener('change', function () { st.gothic = el.gothic.checked; syncUI(); save(); });
   document.querySelectorAll('input[name="skin"]').forEach(function (r) {
     r.addEventListener('change', function () { st.skin = r.value; syncUI(); show(); save(); });
@@ -1278,7 +1357,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
       } catch (e) { res(null); }
     });
   }
-  function userBookRecord(b) { return { id: b.id, title: b.title, author: b.author, text: b.text, colophon: b.colophon || '', added: b.added }; }
+  function userBookRecord(b) { return { id: b.id, title: b.title, author: b.author, text: b.text, ruby: b.ruby || [], colophon: b.colophon || '', added: b.added }; }
 
   function fmtChars(n) { return n.toLocaleString('ja-JP') + '字'; }
   function renderShelf() {
@@ -1319,20 +1398,23 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
 
   function loadText(b) {
     if (typeof b.text === 'string') return Promise.resolve(b.text);
+    var ruby = fetch('books/' + b.id + '.ruby.json').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; });
     return fetch('books/' + b.id + '.txt').then(function (r) {
       if (!r.ok) throw new Error(r.status);
       return r.text();
-    }).then(function (t) { b.text = t.replace(/\n+$/, ''); return b.text; });
+    }).then(function (t) {
+      return ruby.then(function (rb) { b.ruby = rb; b.text = t.replace(/\n+$/, ''); return b.text; });
+    });
   }
   function openBook(id) {
     var b = books.filter(function (x) { return x.id === id; })[0] || books[0];
     if (playing) setPlaying(false); else if (cur.id !== b.id && chunks.length) savePos();
-    cur = { id: b.id, title: b.title, author: b.author, kind: b.kind, text: '', loading: true };
+    cur = { id: b.id, title: b.title, author: b.author, kind: b.kind, text: '', ruby: [], loading: true };
     st.book = b.id; save();
     chunks = []; rebuild(false); renderShelf();
     loadText(b).then(function (text) {
       if (cur.id !== b.id) return;
-      cur.text = text; cur.loading = false;
+      cur.text = text; cur.ruby = b.ruby || []; cur.loading = false;
       showText(b);
       rebuild(false); restorePos(); renderShelf();
     }, function () {
@@ -1356,18 +1438,18 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
   var editTimer = null;
   el.text.addEventListener('input', function () {
     if (cur.kind !== 'user') return;
-    cur.text = el.text.value;
+    cur.text = el.text.value; cur.ruby = [];   // 書き換えるとルビの位置が合わなくなるので外す
     setPlaying(false); clearTimeout(rebuildTimer); rebuildTimer = setTimeout(function () { rebuild(false); }, 300);
     var b = books.filter(function (x) { return x.id === cur.id; })[0];
     if (b) {
-      b.text = cur.text; b.chars = cur.text.replace(/\s/g, '').length;
+      b.text = cur.text; b.ruby = []; b.chars = cur.text.replace(/\s/g, '').length;
       clearTimeout(editTimer);
       editTimer = setTimeout(function () { dbReq('readwrite', function (s) { return s.put(userBookRecord(b)); }); renderShelf(); }, 500);
     }
   });
 
-  function addBook(title, author, text, colophon) {
-    var b = { id: 'u' + Date.now().toString(36), title: title, author: author, kind: 'user', text: text, colophon: colophon || '', chars: text.replace(/\s/g, '').length, added: Date.now() };
+  function addBook(title, author, text, colophon, ruby) {
+    var b = { id: 'u' + Date.now().toString(36), title: title, author: author, kind: 'user', text: text, ruby: ruby || [], colophon: colophon || '', chars: text.replace(/\s/g, '').length, added: Date.now() };
     books.push(b);
     dbReq('readwrite', function (s) { return s.put(userBookRecord(b)); });
     return b;
@@ -1380,8 +1462,8 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
   }
 
   // ---- 本の追加フォーム ----
-  var form = $('addForm'), pendingColophon = '';
-  function resetForm() { form.reset(); pendingColophon = ''; $('addNote').textContent = ''; }
+  var form = $('addForm'), pendingColophon = '', pendingRuby = null, loadedText = null;   // ファイルから読んだ本文とそのルビ
+  function resetForm() { form.reset(); pendingColophon = ''; pendingRuby = null; loadedText = null; $('addNote').textContent = ''; }
   $('addBook').addEventListener('click', function () { form.hidden = !form.hidden; if (!form.hidden) $('newTitle').focus(); });
   $('addCancel').addEventListener('click', function () { resetForm(); form.hidden = true; });
   $('newFile').addEventListener('change', function () {
@@ -1393,8 +1475,9 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
       catch (e) { raw = new TextDecoder('shift_jis').decode(buf); }   // UTF-8 として読めなければ Shift_JIS とみなす
       raw = raw.replace(/^\uFEFF/, '');
       var title = f.name.replace(/\.[^.]+$/, ''), author = '';
-      if (isAozora(raw)) { var a = aozoraClean(raw); raw = a.text; title = a.title || title; author = a.author; pendingColophon = a.colophon; }
-      $('newText').value = raw;
+      pendingRuby = null;
+      if (isAozora(raw)) { var a = aozoraClean(raw); raw = a.text; title = a.title || title; author = a.author; pendingColophon = a.colophon; pendingRuby = a.ruby; }
+      $('newText').value = raw; loadedText = raw;
       if (!$('newTitle').value) $('newTitle').value = title;
       if (!$('newAuthor').value) $('newAuthor').value = author;
       $('addNote').textContent = '読み込みました（' + fmtChars(raw.replace(/\s/g, '').length) + '）。';
@@ -1404,10 +1487,12 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     e.preventDefault();
     var raw = $('newText').value, title = $('newTitle').value.trim(), author = $('newAuthor').value.trim();
     if (!raw.trim()) { $('addNote').textContent = '本文が空です。'; return; }
+    var ruby = raw === loadedText ? pendingRuby : null;   // 読み込んだあと手で直したら、ルビは位置が合わないので使わない
     if (isAozora(raw)) {   // 貼り付けた青空文庫のテキストも整形する
-      var a = aozoraClean(raw); raw = a.text; title = title || a.title; author = author || a.author; pendingColophon = pendingColophon || a.colophon;
+      var a = aozoraClean(raw); raw = a.text; title = title || a.title; author = author || a.author; pendingColophon = pendingColophon || a.colophon; ruby = a.ruby;
     }
-    var b = addBook(title || raw.trim().slice(0, 12), author, raw.replace(/\r\n?/g, '\n').replace(/^\n+|\s+$/g, ''), pendingColophon);
+    if (!ruby || !ruby.length) { raw = raw.replace(/\r\n?/g, '\n').replace(/^\n+|\s+$/g, ''); ruby = []; }
+    var b = addBook(title || raw.trim().slice(0, 12), author, raw, pendingColophon, ruby);
     resetForm(); form.hidden = true;
     openBook(b.id);
   });
@@ -1435,7 +1520,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     return dbReq('readonly', function (s) { return s.getAll(); });
   }).then(function (list) {
     (list || []).sort(function (a, b) { return a.added - b.added; }).forEach(function (r) {
-      books.push({ id: r.id, title: r.title, author: r.author, kind: 'user', text: r.text, colophon: r.colophon, chars: r.text.replace(/\s/g, '').length, added: r.added });
+      books.push({ id: r.id, title: r.title, author: r.author, kind: 'user', text: r.text, ruby: r.ruby || [], colophon: r.colophon, chars: r.text.replace(/\s/g, '').length, added: r.added });
     });
     if (legacyText) {   // 書棚ができる前の本文を移す
       var b = addBook('前回の本文', '', legacyText);

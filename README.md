@@ -17,6 +17,8 @@
 
 青空文庫から10作品（羅生門、蜘蛛の糸、走れメロス、山月記、注文の多い料理店、夢十夜、銀河鉄道の夜、ごん狐、檸檬、科学者とあたま）を同梱しています。「本を追加」から、文章の貼り付けかテキストファイル（UTF-8 / Shift_JIS）の読み込みで本を足せます。青空文庫のテキストファイルなら、ルビ・注記・底本情報を自動で取り除きます。
 
+青空文庫の本はルビも表示できます（設定の「ルビを表示する」）。ルビは親文字の上に小さく出し、ルビの付いた語は区切りの途中で割りません。追加した本の本文を書き換えると、位置が合わなくなるためルビは外れます。
+
 読んだ位置は本ごとに覚え、次に開くとその文の頭から再開します。本文が書き換わっていたら冒頭から始めます。追加した本はブラウザの IndexedDB に、設定と読んだ位置は localStorage に保存します。どちらもサーバーには送りません。
 
 GitHub Pages で公開している版では、アクセス数を数えるために [GoatCounter](https://www.goatcounter.com/) を使っています。送るのはページの URL と参照元だけで、読んでいる本や本文、設定は送りません。
@@ -70,7 +72,7 @@ npm run build
 
 `kuromoji.js` は、辞書を `fetch` で読む独自のローダー（`build/kuromoji-loader/Loader.js`）に差し替えてバンドルしています。辞書は配信の都合で `.gz` を置けない環境があるため、gzip のまま base64 にした `.txt` にしています。
 
-同梱の本は `python3 build/aozora_books.py <元テキストのフォルダ>` で作ります。元テキストは [aozorahack/aozorabunko_text](https://github.com/aozorahack/aozorabunko_text) のものを使い、JIS X 0213 の外字は Unicode に置き換えています。
+同梱の本は `python3 build/aozora_books.py <元テキストのフォルダ>` で作ります。本文は `books/<id>.txt`、ルビは `books/<id>.ruby.json`（`[開始, 終了, 読み]` の一覧。位置は UTF-16 の単位）です。元テキストは [aozorahack/aozorabunko_text](https://github.com/aozorahack/aozorabunko_text) のものを使い、JIS X 0213 の外字は Unicode に置き換えています。
 
 ## ライセンス
 
