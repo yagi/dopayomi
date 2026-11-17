@@ -131,7 +131,9 @@ body.immersive .stage {
 #chunk .lead { text-align: right; }
 #chunk .trail { text-align: left; }
 #chunk .kana { font-size: calc(1em * var(--fs-kana, 1) / var(--fs-kanji, 1)); }
-.stage.gothic #chunk { font-family: var(--font-gothic); }
+/* 表示窓の書体: 自動はテーマのまま。明朝・ゴシックを選ぶとテーマより優先する */
+.stage.f-mincho #chunk { font-family: var(--sys-mincho); }
+.stage.f-gothic #chunk { font-family: var(--sys-gothic); }
 /* ルビ: 親文字の幅を変えないよう、読みは親文字の上に浮かせる（中心の計算にも影響しない） */
 #chunk .rb { position: relative; }
 #chunk .rt {
@@ -554,7 +556,14 @@ textarea[readonly] { color: var(--muted); }
         <input type="range" id="fsKana" min="50" max="150" step="5" value="65">
       </div>
       <div class="check"><input type="checkbox" id="ruby"><label for="ruby">ルビを表示する</label></div>
-      <div class="check"><input type="checkbox" id="gothic"><label for="gothic">ゴシック体で表示する</label></div>
+      <div class="field">
+        <span class="label">表示窓の書体</span>
+        <div class="seg" role="radiogroup" aria-label="表示窓の書体">
+          <input type="radio" name="sfont" id="f-auto" value="auto" checked><label for="f-auto">自動</label>
+          <input type="radio" name="sfont" id="f-mincho" value="mincho"><label for="f-mincho">明朝</label>
+          <input type="radio" name="sfont" id="f-gothic" value="gothic"><label for="f-gothic">ゴシック</label>
+        </div>
+      </div>
       <div class="row">
         <button id="copySettings" type="button">設定をコピー</button>
         <span class="hint" id="copyNote"></span>
@@ -1035,9 +1044,9 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
   var $ = function (id) { return document.getElementById(id); };
   var el = { chunk: $('chunk'), stage: $('stage'), seek: $('seek'), pos: $('pos'), remain: $('remain'), play: $('play'),
     text: $('text'), preview: $('preview'), cpm: $('cpm'), cpmOut: $('cpmOut'), maxLen: $('maxLen'), maxLenOut: $('maxLenOut'),
-    maxLenLabel: $('maxLenLabel'), maxLenHint: $('maxLenHint'), pause: $('pause'), pauseOut: $('pauseOut'), gothic: $('gothic'), merge: $('merge'), ruby: $('ruby'), autofull: $('autofull'), fullNote: $('fullNote'), immersive: $('immersive'), follow: $('follow'), fsKanji: $('fsKanji'), fsKanjiOut: $('fsKanjiOut'), fsKana: $('fsKana'), fsKanaOut: $('fsKanaOut'), terms: $('terms'), auto: $('auto'), detected: $('detected'), modeHint: $('modeHint') };
+    maxLenLabel: $('maxLenLabel'), maxLenHint: $('maxLenHint'), pause: $('pause'), pauseOut: $('pauseOut'), merge: $('merge'), ruby: $('ruby'), autofull: $('autofull'), fullNote: $('fullNote'), immersive: $('immersive'), follow: $('follow'), fsKanji: $('fsKanji'), fsKanjiOut: $('fsKanjiOut'), fsKana: $('fsKana'), fsKanaOut: $('fsKanaOut'), terms: $('terms'), auto: $('auto'), detected: $('detected'), modeHint: $('modeHint') };
 
-  var st = { v3: true, v4: true, mode: 'bunsetsu', cpm: 900, maxLen: 5, pause: 1.2, gothic: false, immersive: true, autofull: false, skin: 'paper', ruby: true, follow: true, fsKanji: 70, fsKana: 65, merge: true, terms: '', auto: true, book: 'sample' };
+  var st = { v3: true, v4: true, mode: 'bunsetsu', cpm: 900, maxLen: 5, pause: 1.2, sfont: 'auto', immersive: true, autofull: false, skin: 'paper', ruby: true, follow: true, fsKanji: 70, fsKana: 65, merge: true, terms: '', auto: true, book: 'sample' };
   var legacyText = null;   // 書棚ができる前に保存していた本文（あれば「前回の本文」として書棚に移す）
   try {
     var saved = JSON.parse(localStorage.getItem('rsvp-ja-2') || 'null');
@@ -1049,6 +1058,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     if (saved && saved.smallkana) { saved.fsKana = 90; }
     if (saved && !saved.v4) { saved.immersive = true; saved.v4 = true; }   // UI消去を既定でオンにした版への移行
     if (saved && typeof saved.text === 'string') { if (saved.text.trim() && saved.text !== SAMPLE) legacyText = saved.text; delete saved.text; }
+    if (saved && 'gothic' in saved) { if (!saved.sfont) saved.sfont = saved.gothic ? 'gothic' : 'auto'; delete saved.gothic; }   // 旧「ゴシック体で表示する」からの移行
     if (saved) { delete saved.smallkana; Object.assign(st, saved); }
   } catch (e) {}
   function save() { try { localStorage.setItem('rsvp-ja-2', JSON.stringify(st)); } catch (e) {} }
@@ -1271,7 +1281,8 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     el.maxLenLabel.textContent = st.mode === 'fixed' ? '1区切りの字数' : phraseMode() ? '1区切りの目安' : '1区切りの上限';
     el.maxLenHint.textContent = MAXLEN_HINTS[st.mode];
     el.pause.value = st.pause; el.pauseOut.textContent = st.pause === 0 ? 'なし' : '×' + st.pause.toFixed(1);
-    el.gothic.checked = st.gothic; el.ruby.checked = st.ruby; el.stage.classList.toggle('noruby', !st.ruby); el.immersive.checked = st.immersive; el.autofull.checked = st.autofull; el.follow.checked = st.follow; el.merge.checked = st.merge; el.merge.disabled = !phraseMode(); el.auto.checked = st.auto; el.auto.disabled = el.terms.disabled = !phraseMode(); if (el.terms.value !== st.terms) el.terms.value = st.terms; el.stage.classList.toggle('gothic', st.gothic); el.fsKanji.value = st.fsKanji; el.fsKanjiOut.textContent = st.fsKanji + '%';
+    el.ruby.checked = st.ruby; el.stage.classList.toggle('noruby', !st.ruby); el.immersive.checked = st.immersive; el.autofull.checked = st.autofull; el.follow.checked = st.follow; el.merge.checked = st.merge; el.merge.disabled = !phraseMode(); el.auto.checked = st.auto; el.auto.disabled = el.terms.disabled = !phraseMode(); if (el.terms.value !== st.terms) el.terms.value = st.terms; el.stage.classList.toggle('f-mincho', st.sfont === 'mincho'); el.stage.classList.toggle('f-gothic', st.sfont === 'gothic');
+    var sf = document.querySelector('input[name="sfont"][value="' + st.sfont + '"]'); if (sf) sf.checked = true; el.fsKanji.value = st.fsKanji; el.fsKanjiOut.textContent = st.fsKanji + '%';
     el.fsKana.value = st.fsKana; el.fsKanaOut.textContent = st.fsKana + '%';
     el.stage.style.setProperty('--fs-kanji', st.fsKanji / 100); el.stage.style.setProperty('--fs-kana', st.fsKana / 100);
     el.modeHint.textContent = st.mode !== 'pos' ? HINTS[st.mode]
@@ -1324,7 +1335,9 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     } catch (e) { note.textContent = '下の文字列を手でコピーしてください'; }
   });
   el.ruby.addEventListener('change', function () { st.ruby = el.ruby.checked; syncUI(); save(); });
-  el.gothic.addEventListener('change', function () { st.gothic = el.gothic.checked; syncUI(); save(); });
+  document.querySelectorAll('input[name="sfont"]').forEach(function (r) {
+    r.addEventListener('change', function () { st.sfont = r.value; syncUI(); save(); });
+  });
   document.querySelectorAll('input[name="skin"]').forEach(function (r) {
     r.addEventListener('change', function () { st.skin = r.value; syncUI(); show(); save(); });
   });
