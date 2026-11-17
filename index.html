@@ -176,6 +176,9 @@ button.primary { background: var(--ink); color: var(--bg); min-width: 112px; }
 button.primary:hover { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 :focus-visible { outline: 1px solid var(--accent); outline-offset: 3px; }
 .controls .hint { margin: 0; }
+/* 1つ戻る・進むのボタンは、指で操作する縦長の画面（スマホなど）でだけ出す */
+.navbtn { display: none; min-width: 52px; letter-spacing: 0; }
+@media (pointer: coarse) and (orientation: portrait) { .navbtn { display: inline-block; } }
 .onplay { color: var(--muted); margin-left: 10px; letter-spacing: .1em; }
 .keys { color: var(--muted); font-size: 12.5px; margin-left: auto; }
 kbd { font: inherit; border: 1px solid var(--rule-soft); padding: 0 5px; }
@@ -271,6 +274,7 @@ textarea {
 @media (max-width: 520px) { .book .meta { display: none; } }
 .addform { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding: 14px 0; }
 .addform[hidden] { display: none; }
+.check[hidden] { display: none; }
 .addform textarea { min-height: 110px; }
 .addform .row { justify-content: flex-start; }
 .filebtn { cursor: pointer; }
@@ -494,10 +498,11 @@ textarea[readonly] { color: var(--muted); }
 
   <div class="controls">
     <button class="primary" id="play" type="button">再生</button>
+    <button class="navbtn" id="prevBtn" type="button" aria-label="1つ戻る">◀</button>
+    <button class="navbtn" id="nextBtn" type="button" aria-label="1つ進む">▶</button>
     <span class="check"><input type="checkbox" id="immersive"><label for="immersive">UI消去</label></span>
-    <span class="check"><input type="checkbox" id="autofull"><label for="autofull">全画面化</label></span>
+    <span class="check" id="autofullBox"><input type="checkbox" id="autofull"><label for="autofull">全画面化</label></span>
     <button id="restart" type="button">最初に戻る</button>
-    <span class="hint" id="fullNote" hidden></span>
     <span class="keys"><kbd>Space</kbd> 再生／停止　<kbd>←</kbd><kbd>→</kbd> 前後　<kbd>↑</kbd><kbd>↓</kbd> 速度</span>
   </div>
 
@@ -1061,7 +1066,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
   var $ = function (id) { return document.getElementById(id); };
   var el = { chunk: $('chunk'), stage: $('stage'), seek: $('seek'), pos: $('pos'), remain: $('remain'), play: $('play'),
     text: $('text'), preview: $('preview'), cpm: $('cpm'), cpmOut: $('cpmOut'), maxLen: $('maxLen'), maxLenOut: $('maxLenOut'),
-    maxLenLabel: $('maxLenLabel'), maxLenHint: $('maxLenHint'), pause: $('pause'), pauseOut: $('pauseOut'), merge: $('merge'), ruby: $('ruby'), autofull: $('autofull'), fullNote: $('fullNote'), immersive: $('immersive'), follow: $('follow'), fsKanji: $('fsKanji'), fsKanjiOut: $('fsKanjiOut'), fsKana: $('fsKana'), fsKanaOut: $('fsKanaOut'), terms: $('terms'), auto: $('auto'), detected: $('detected'), modeHint: $('modeHint') };
+    maxLenLabel: $('maxLenLabel'), maxLenHint: $('maxLenHint'), pause: $('pause'), pauseOut: $('pauseOut'), merge: $('merge'), ruby: $('ruby'), autofull: $('autofull'), autofullBox: $('autofullBox'), immersive: $('immersive'), follow: $('follow'), fsKanji: $('fsKanji'), fsKanjiOut: $('fsKanjiOut'), fsKana: $('fsKana'), fsKanaOut: $('fsKanaOut'), terms: $('terms'), auto: $('auto'), detected: $('detected'), modeHint: $('modeHint') };
 
   var st = { v3: true, v4: true, mode: 'bunsetsu', cpm: 900, maxLen: 5, pause: 1.2, sfont: 'auto', immersive: true, autofull: false, skin: 'paper', ruby: true, follow: true, fsKanji: 70, fsKana: 65, merge: true, terms: '', auto: true, book: 'sample' };
   var legacyText = null;   // 書棚ができる前に保存していた本文（あれば「前回の本文」として書棚に移す）
@@ -1316,17 +1321,20 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
   el.stage.addEventListener('click', function () { setPlaying(!playing); });
   $('restart').addEventListener('click', function () { go(0); });
   // 再生時に全画面化: 再生はクリックかキー操作から始まるので、その場で全画面を要求できる。停止しても解除はしない
+  // 全画面にできない環境（iPhone の Safari、全画面を許していない埋め込み先など）では、スイッチごと隠す
+  var fullOK = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
   function enterFull() {
-    if (!st.autofull || document.fullscreenElement) return;
+    if (!st.autofull || !fullOK || document.fullscreenElement || document.webkitFullscreenElement) return;
     try {
-      var p = document.documentElement.requestFullscreen();
+      var de = document.documentElement;
+      var p = de.requestFullscreen ? de.requestFullscreen() : de.webkitRequestFullscreen();
       if (p && p.catch) p.catch(fullFailed);
     } catch (e) { fullFailed(); }
   }
-  function fullFailed() {
-    el.fullNote.hidden = false;
-    el.fullNote.textContent = 'この環境では全画面にできません';
-  }
+  function fullFailed() { fullOK = false; el.autofullBox.hidden = true; }
+  el.autofullBox.hidden = !fullOK;
+  $('prevBtn').addEventListener('click', function () { go(idx - 1); });
+  $('nextBtn').addEventListener('click', function () { go(idx + 1); });
   el.seek.addEventListener('input', function () { go(+el.seek.value); });
   el.preview.addEventListener('click', function (e) { if (e.target.dataset && e.target.dataset.i) go(+e.target.dataset.i); });
   el.cpm.addEventListener('input', function () { st.cpm = +el.cpm.value; syncUI(); show(); save(); });
@@ -1341,7 +1349,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
   el.fsKana.addEventListener('input', function () { st.fsKana = +el.fsKana.value; syncUI(); save(); });
   el.follow.addEventListener('change', function () { st.follow = el.follow.checked; show(); save(); });
   el.immersive.addEventListener('change', function () { st.immersive = el.immersive.checked; setImmersive(playing && st.immersive); save(); });
-  el.autofull.addEventListener('change', function () { st.autofull = el.autofull.checked; el.fullNote.hidden = true; save(); });
+  el.autofull.addEventListener('change', function () { st.autofull = el.autofull.checked; save(); });
   $('copySettings').addEventListener('click', function () {   // 本文を除いた設定を文字列にしてコピーする
     var out = {};
     Object.keys(st).forEach(function (k) { if (!/^(text|v3|v4|book)$/.test(k)) out[k] = st[k]; });
