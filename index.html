@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja" data-skin="paper">
+<html lang="ja" data-skin="dopa">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -516,8 +516,8 @@ textarea[readonly] { color: var(--muted); }
         <div class="seg" role="radiogroup" aria-label="見た目">
           <input type="radio" name="skin" id="k-classic" value="classic"><label for="k-classic">標準</label>
           <input type="radio" name="skin" id="k-tachisto" value="tachisto"><label for="k-tachisto">計器</label>
-          <input type="radio" name="skin" id="k-dopa" value="dopa"><label for="k-dopa">ドパ</label>
-          <input type="radio" name="skin" id="k-paper" value="paper" checked><label for="k-paper">紙</label>
+          <input type="radio" name="skin" id="k-dopa" value="dopa" checked><label for="k-dopa">ドパ</label>
+          <input type="radio" name="skin" id="k-paper" value="paper"><label for="k-paper">紙</label>
           <input type="radio" name="skin" id="k-night" value="night"><label for="k-night">夜</label>
         </div>
       </div>
@@ -535,8 +535,8 @@ textarea[readonly] { color: var(--muted); }
 
       <div class="field">
         <label for="cpm">速度 <output id="cpmOut"></output></label>
-        <input type="range" id="cpm" min="300" max="2400" step="50" value="900">
-        <p class="hint">標準は毎分900字です。</p>
+        <input type="range" id="cpm" min="300" max="2400" step="50" value="1300">
+        <p class="hint">標準は毎分1300字です。</p>
       </div>
 
       <div class="field">
@@ -1073,7 +1073,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
   // スマホ（指で操作する小さな画面）では文字を大きめに始める
   var isPhone = false;
   try { isPhone = window.matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) <= 760; } catch (e) {}
-  var st = { v3: true, v4: true, v5: true, mode: 'bunsetsu', cpm: 900, maxLen: 5, pause: 1.2, sfont: 'auto', immersive: true, autofull: false, skin: 'paper', ruby: true, follow: true, fsKanji: 70, fsKana: 65, merge: true, terms: '', auto: true, book: 'sample' };
+  var st = { v3: true, v4: true, v5: true, mode: 'bunsetsu', cpm: 1300, maxLen: 5, pause: 1.2, sfont: 'auto', immersive: true, autofull: false, skin: 'dopa', ruby: true, follow: true, fsKanji: 70, fsKana: 65, merge: true, terms: '', auto: true, book: 'sample' };
   if (isPhone) { st.fsKanji = 100; st.fsKana = 90; }
   var legacyText = null;   // 書棚ができる前に保存していた本文（あれば「前回の本文」として書棚に移す）
   try {
