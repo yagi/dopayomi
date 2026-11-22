@@ -3,7 +3,7 @@
 # 元テキストは aozorahack/aozorabunko_text の cards/<作家番号>/files/<ファイル名>/<ファイル名>.txt
 import json, os, re, sys
 
-BOOKS = [  # (id, 作家番号, ファイル名)
+BOOKS = [  # (id, 作家番号, ファイル名[, 著者の表記]) 翻訳書などで2行目が著者でないときは表記を指定する
     ('rashomon', '000879', '127_ruby_150'),
     ('kumonoito', '000879', '92_ruby_164'),
     ('hashiremerosu', '000035', '1567_ruby_4948'),
@@ -12,6 +12,7 @@ BOOKS = [  # (id, 作家番号, ファイル名)
     ('chumon', '000081', '43754_ruby_17594'),
     ('yumejuya', '000148', '799_ruby_6024'),
     ('gingatetsudo', '000081', '456_ruby_145'),
+    ('henshin', '001235', '49866_ruby_41853', 'フランツ・カフカ（原田義人訳）'),
     ('gongitsune', '000121', '628_ruby_649'),
     ('remon', '000074', '424_ruby_19825'),
     ('sushi', '000076', '1016_ruby_19595'),
@@ -85,9 +86,10 @@ root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 out = os.path.join(root, 'books')
 os.makedirs(out, exist_ok=True)
 index = []
-for bid, card, fname in BOOKS:
+for bid, card, fname, *over in BOOKS:
     raw = open(os.path.join(src, 'cards', card, 'files', fname, fname + '.txt'), 'rb').read().decode('shift_jis_2004')
     title, author, body, colophon, ruby = clean(raw)
+    if over: author = over[0]
     open(os.path.join(out, bid + '.txt'), 'w', encoding='utf-8').write(body + '\n')
     json.dump(ruby, open(os.path.join(out, bid + '.ruby.json'), 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
     index.append({'id': bid, 'title': title, 'author': author, 'chars': len(re.sub(r'\s', '', body)),
