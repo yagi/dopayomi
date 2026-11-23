@@ -127,7 +127,8 @@ body.immersive { overflow: hidden; }
 @media (orientation: portrait) {
   body.immersive main > :not(.stage) { visibility: hidden; }
   /* 枠・影・窓の地色を消して文字だけを残す。枠の太さはそのまま透明にして、位置を動かさない */
-  body.immersive .stage { border-color: transparent; box-shadow: none; background: var(--bg); cursor: none; }
+  body.immersive { background: var(--stage-bg, var(--bg)); }   /* ページ全体を表示窓の地色で塗る（計器なら黒） */
+  body.immersive .stage { border-color: transparent; box-shadow: none; background: transparent; cursor: none; }
 }
 #chunk {
   font-family: var(--font-display);
@@ -511,6 +512,7 @@ textarea[readonly] { color: var(--muted); }
     <button class="navbtn" id="prevBtn" type="button" aria-label="1つ戻る">◀</button>
     <button class="navbtn" id="nextBtn" type="button" aria-label="1つ進む">▶</button>
     <span class="check"><input type="checkbox" id="immersive"><label for="immersive">UI消去</label></span>
+    <button id="share" type="button" hidden>この位置を共有</button>
     <span class="check" id="autofullBox"><input type="checkbox" id="autofull"><label for="autofull">全画面化</label></span>
     <span class="keys"><kbd>Space</kbd> 再生／停止　<kbd>←</kbd><kbd>→</kbd> 前後　<kbd>↑</kbd><kbd>↓</kbd> 速度</span>
   </div>
@@ -1473,18 +1475,20 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
       return ruby.then(function (rb) { b.ruby = rb; b.text = t.replace(/\n+$/, ''); return b.text; });
     });
   }
-  function openBook(id, fromUser) {
+  function openBook(id, fromUser, at) {
     var b = books.filter(function (x) { return x.id === id; })[0] || books[0];
     if (playing) setPlaying(false); else if (cur.id !== b.id && chunks.length) savePos();
-    cur = { id: b.id, title: b.title, author: b.author, kind: b.kind, text: '', ruby: [], loading: true };
+    cur = { id: b.id, aid: b.aid || '', title: b.title, author: b.author, kind: b.kind, text: '', ruby: [], loading: true };
+    $('share').hidden = !b.aid;
     st.book = b.id; save();
     chunks = []; rebuild(false); renderShelf();
     loadText(b).then(function (text) {
       if (cur.id !== b.id) return;
       cur.text = text; cur.ruby = b.ruby || []; cur.loading = false;
       showText(b);
-      rebuild(false); restorePos(); renderShelf();
-      if (fromUser && window.matchMedia('(max-width: 760px)').matches) {   // スマホでは、書棚から選んだら表示窓まで戻す
+      rebuild(false); renderShelf();
+      if (at) jumpTo(at); else restorePos();   // 共有リンクから開いたときは、その位置で止めておく（自分の続きは上書きしない）
+      if ((fromUser || at) && window.matchMedia('(max-width: 760px)').matches) {   // スマホでは、書棚から選んだら表示窓まで戻す
         var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         window.scrollTo({ top: 0, behavior: still ? 'auto' : 'smooth' });
       }
@@ -1495,6 +1499,70 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
       showText(b); rebuild(false);
     });
   }
+  // ================= 位置の共有（permalink） =================
+  // 形: https://yagi.github.io/dopayomi/#a{青空文庫の作品ID}-{本文の文字位置}-{表示していた区切り}
+  // 区切りの文字列は、本文が変わって位置がずれたときに探し直すための手がかり
+  var SHARE_BASE = 'https://yagi.github.io/dopayomi/';
+  function parseLink(hash) {
+    var m = /^#a(\d+)-(\d+)(?:-(.+))?$/.exec(hash || '');
+    if (!m) return null;
+    var snippet = '';
+    try { snippet = m[3] ? decodeURIComponent(m[3]) : ''; } catch (e) {}
+    return { aid: m[1], offset: +m[2], snippet: snippet };
+  }
+  function resolveOffset(at) {
+    var text = cur.text, off = Math.min(at.offset, Math.max(0, text.length - 1)), s = at.snippet.replace(/\s/g, '');
+    if (!s) return off;
+    var flat = function (from) {   // 空白を除いて比べる（区切りの文字列は空白を含まないため）
+      var out = '', p = from;
+      while (p < text.length && out.length < s.length) { if (!/\s/.test(text[p])) out += text[p]; p++; }
+      return out;
+    };
+    if (flat(off) === s) return off;
+    var key = s.slice(0, Math.min(s.length, 8)), best = -1;
+    for (var i = text.indexOf(key); i >= 0; i = text.indexOf(key, i + 1)) {   // ずれていたら、近い出現を探す
+      if (best < 0 || Math.abs(i - off) < Math.abs(best - off)) best = i;
+    }
+    return best >= 0 ? best : off;
+  }
+  function jumpTo(at) {
+    if (!chunks.length) return;
+    idx = sentenceStartOf(indexAt(resolveOffset(at)));
+    show();
+  }
+  function shareText() {
+    var c = chunks[idx];
+    if (!c || !cur.aid) return null;
+    var url = SHARE_BASE + '#a' + cur.aid + '-' + c.start + '-' + encodeURIComponent(c.t.replace(/\s/g, ''));
+    var q = cur.text.slice(chunks[sentenceStartOf(idx)].start).replace(/\s+/g, '');   // 引用は、受け取った側が開く位置（その文の頭）から
+    var quote = q.length > 64 ? q.slice(0, 64) + '…' : q;
+    return { title: cur.title, url: url, text: '『' + cur.title + '』' + (cur.author ? cur.author : '') + '「' + quote + '」' };
+  }
+  $('share').addEventListener('click', function () {
+    var s = shareText(), btn = this;
+    if (!s) return;
+    var all = s.text + ' ' + s.url;
+    function done(msg) { btn.textContent = msg; setTimeout(function () { btn.textContent = 'この位置を共有'; }, 2000); }
+    function copy() {
+      try { navigator.clipboard.writeText(all).then(function () { done('コピーしました'); }, function () { done('コピーできませんでした'); }); }
+      catch (e) { done('コピーできませんでした'); }
+    }
+    // スマホなど共有メニューがある環境ではそれを開き、なければクリップボードにコピーする
+    if (navigator.share && window.matchMedia('(pointer: coarse)').matches) {
+      navigator.share({ title: s.title, text: s.text, url: s.url }).catch(function (e) { if (e && e.name !== 'AbortError') copy(); });
+    } else copy();
+  });
+  function openFromHash() {
+    var at = parseLink(location.hash);
+    if (!at) return false;
+    var b = books.filter(function (x) { return x.aid === at.aid; })[0];
+    if (!b) return false;
+    openBook(b.id, true, at);
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}   // 再読み込みで同じ位置に戻されないよう、ハッシュは消す
+    return true;
+  }
+  window.addEventListener('hashchange', openFromHash);
+
   function showText(b) {
     el.text.value = cur.text;
     el.text.readOnly = b.kind !== 'user';
@@ -1600,10 +1668,10 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     }
     return fetch('books/index.json').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; });
   }).then(function (list) {
-    var aoz = (list || []).map(function (x) { return { id: x.id, title: x.title, author: x.author, kind: 'aozora', chars: x.chars, card: x.card, colophon: x.colophon }; });
+    var aoz = (list || []).map(function (x) { var m = /card(\d+)\.html/.exec(x.card || ''); return { id: x.id, aid: m ? m[1] : '', title: x.title, author: x.author, kind: 'aozora', chars: x.chars, card: x.card, colophon: x.colophon }; });
     for (var i = aoz.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = aoz[i]; aoz[i] = aoz[j]; aoz[j] = t; }   // 青空文庫の本は開くたびに並びを混ぜる
     books.splice.apply(books, [1, 0].concat(aoz));   // サンプルの次に青空文庫の本を並べる
-    openBook(books.some(function (x) { return x.id === st.book; }) ? st.book : 'sample');
+    if (!openFromHash()) openBook(books.some(function (x) { return x.id === st.book; }) ? st.book : 'sample');
   });
 })();
 </script>
