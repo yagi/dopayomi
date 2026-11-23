@@ -1297,6 +1297,17 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     document.body.classList.toggle('immersive', on);
     anchor = null;
   }
+  // 再生中は、画面のどこを押しても停止する。止めるための押下なので、その押下で別のボタンなどは動かさない
+  var swallowUntil = 0;
+  document.addEventListener('pointerdown', function (e) {
+    if (!playing) return;
+    setPlaying(false);
+    swallowUntil = Date.now() + 700;
+    e.preventDefault(); e.stopPropagation();
+  }, true);
+  document.addEventListener('click', function (e) {
+    if (Date.now() < swallowUntil) { swallowUntil = 0; e.preventDefault(); e.stopPropagation(); }
+  }, true);
   document.addEventListener('mousemove', function (e) {
     if (!playing || !document.body.classList.contains('immersive')) return;
     if (!anchor) { anchor = { x: e.clientX, y: e.clientY }; return; }
