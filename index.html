@@ -126,6 +126,8 @@ body.immersive { overflow: hidden; }
 }
 @media (orientation: portrait) {
   body.immersive main > :not(.stage) { visibility: hidden; }
+  /* 枠・影・窓の地色を消して文字だけを残す。枠の太さはそのまま透明にして、位置を動かさない */
+  body.immersive .stage { border-color: transparent; box-shadow: none; background: var(--bg); cursor: none; }
 }
 #chunk {
   font-family: var(--font-display);
