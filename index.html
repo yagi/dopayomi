@@ -109,17 +109,23 @@ h2 {
 }
 .stage::before { top: calc(50% - 78px); }
 .stage::after { bottom: calc(50% - 78px); }
-/* 再生中は表示窓だけを画面いっぱいに広げ、ほかの操作部品を覆い隠す */
+/* 再生中は操作部品を隠す。横長の画面では表示窓を画面いっぱいに広げ、
+   縦長の画面（スマホなど）では表示窓をその場に残して、ほかを見えなくするだけにする */
 body.immersive { overflow: hidden; }
-body.immersive .stage {
-  position: fixed;
-  inset: 0;
-  height: auto;
-  border: 0;
-  box-shadow: none;   /* ドパの水色の影などテーマの飾りを消す */
-  margin: 0;
-  z-index: 10;
-  cursor: none;
+@media (orientation: landscape) {
+  body.immersive .stage {
+    position: fixed;
+    inset: 0;
+    height: auto;
+    border: 0;
+    box-shadow: none;   /* ドパの水色の影などテーマの飾りを消す */
+    margin: 0;
+    z-index: 10;
+    cursor: none;
+  }
+}
+@media (orientation: portrait) {
+  body.immersive main > :not(.stage) { visibility: hidden; }
 }
 #chunk {
   font-family: var(--font-display);
@@ -1582,6 +1588,7 @@ if (typeof module !== 'undefined') module.exports = { segment: segment, duration
     return fetch('books/index.json').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; });
   }).then(function (list) {
     var aoz = (list || []).map(function (x) { return { id: x.id, title: x.title, author: x.author, kind: 'aozora', chars: x.chars, card: x.card, colophon: x.colophon }; });
+    for (var i = aoz.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = aoz[i]; aoz[i] = aoz[j]; aoz[j] = t; }   // 青空文庫の本は開くたびに並びを混ぜる
     books.splice.apply(books, [1, 0].concat(aoz));   // サンプルの次に青空文庫の本を並べる
     openBook(books.some(function (x) { return x.id === st.book; }) ? st.book : 'sample');
   });
